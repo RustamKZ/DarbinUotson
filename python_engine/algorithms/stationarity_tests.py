@@ -2,10 +2,10 @@ import numpy as np
 from statsmodels.tsa.stattools import adfuller
 from models.responses import AdfTestResult, CriticalValues
 
-def adf_test(data: np.ndarray) -> AdfTestResult:
+def adf_test(data : np.ndarray) -> AdfTestResult:
   result = adfuller(data, autolag='AIC')
 
-  critical = CriticalValues(
+  critical = AdfCriticalValues(
     one_percent = float(result[4]['1%']),
     five_percent = float(result[4]['5%']),
     ten_percent = float(result[4]['10%'])
@@ -19,3 +19,6 @@ def adf_test(data: np.ndarray) -> AdfTestResult:
     critical_values = critical,
     is_stationary = result[1] < 0.05
   )
+
+def kpss_test(data : np.ndarray) :
+  pass

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class CriticalValues:
+class AdfCriticalValues:
   one_percent: float
   five_percent: float
   ten_percent: float
@@ -12,8 +12,23 @@ class AdfTestResult:
   p_value: float
   used_lag: int
   n_obs: int
-  critical_values: CriticalValues
+  critical_values: AdfCriticalValues
   is_stationary: bool
+
+@dataclass
+class KpssCritialValues:
+  one_percent: float
+  two_and_half_percent: float
+  five_percent: float
+  ten_percent: float
+
+
+@dataclass
+class KpssTestResult:
+  kpss_stat: float
+  p_value: float
+  lags: int
+  crit: KpssCritialValues
 
 @dataclass
 class ErrorResponse:
