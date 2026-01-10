@@ -45,20 +45,18 @@ class PythonBridge {
     }
 
     private fun findProjectRoot(): String {
-        // Для AppImage: executable в lib/app/
+        // for AppImage: executable in lib/app/
         val userDir = System.getProperty("user.dir")
 
-        // Проверяем разные варианты
         val candidates = listOf(
             File(userDir),                           // DEV: DarbinUotson/
             File(userDir).parentFile,                // DEV: composeApp/
             File(userDir).parentFile?.parentFile,    // AppImage: lib/
-            File(userDir, ".."),                     // относительный путь
+            File(userDir, ".."),                     // relative path
         )
 
         for (dir in candidates) {
             if (dir != null && dir.exists()) {
-                // Ищем python_runtime или python_engine
                 if (File(dir, "python_runtime").exists() ||
                     File(dir, "python_engine").exists()) {
                     println("Found project root: ${dir.absolutePath}")
@@ -67,7 +65,7 @@ class PythonBridge {
             }
         }
 
-        // Fallback
+        // fallback
         return userDir
     }
 
