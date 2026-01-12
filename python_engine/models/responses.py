@@ -16,7 +16,7 @@ class AdfTestResult:
   is_stationary: bool
 
 @dataclass
-class KpssCritialValues:
+class KpssCriticalValues:
   one_percent: float
   two_and_half_percent: float
   five_percent: float
@@ -28,7 +28,7 @@ class KpssTestResult:
   kpss_stat: float
   p_value: float
   lags: int
-  crit: KpssCritialValues
+  crit: KpssCriticalValues
 
 @dataclass
 class ErrorResponse:
