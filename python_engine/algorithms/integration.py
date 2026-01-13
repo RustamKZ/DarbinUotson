@@ -10,7 +10,9 @@ def log(msg):
 
 def determine_integration_order(
   data: np.ndarray,
-  max_order: int = 2
+  max_order: int = 2,
+  kpss_regression: str = "c",
+  za_regression: str = "c"
 ) -> IntegrationOrderResult:
   current_data = data.copy()
 
@@ -62,7 +64,7 @@ def determine_integration_order(
             kpss_result=kpss,
             has_conflict=True
           )
-      za = zivot_andrews_test(current_data)
+      za = zivot_andrews_test(current_data, trend=za_regression)
       if za.is_stationary:
         log(f"ZA: stat with break at {za.breakpoint}")
         return IntegrationOrderResult(
@@ -94,7 +96,7 @@ def determine_integration_order(
           kpss_result=kpss,
           has_conflict=True
         )
-      za = zivot_andrews_test(current_data)
+      za = zivot_andrews_test(current_data, trend=za_regression)
       log(f"ZA: break at {za.breakpoint}")
       return IntegrationOrderResult(
         order=i,

@@ -51,8 +51,8 @@ def adf_test(data: np.ndarray) -> AdfTestResult:
 ⠸⢯⡿⠾⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠫⠋⠀
 communists will be happy - KPSS will help to find out the truth
 """
-def kpss_test(data: np.ndarray) -> KpssTestResult:
-  result = kpss(data, nlags = "auto", regression = "c")
+def kpss_test(data: np.ndarray, regression: str = "c") -> KpssTestResult:
+  result = kpss(data, nlags = "auto", regression = regression)
 
   log(f"kpss: stat={result[0]:.3f}, p={result[1]:.4f}")
 
