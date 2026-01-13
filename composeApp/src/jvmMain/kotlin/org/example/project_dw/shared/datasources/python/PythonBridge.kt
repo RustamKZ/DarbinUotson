@@ -48,6 +48,7 @@ class PythonBridge {
     }
 
     val process = ProcessBuilder(processArgs)
+    // MUST BE false because we need to separate sys.stdout and sys.stderr
       .redirectErrorStream(false)
       .start()
 

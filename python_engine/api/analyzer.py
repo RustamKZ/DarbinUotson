@@ -1,11 +1,3 @@
-"""
-Args:
-  input_json: {"series": [[...], [...]]}
-
-Returns:
-  JSON string with results
-"""
-
 import json
 import sys
 import numpy as np
@@ -13,8 +5,8 @@ from dataclasses import asdict
 from algorithms.integration import determine_integration_order
 
 def analyze_time_series(input_json: str) -> str:
+  # input_json: JSON string {"series": [[1,2,3], [4,5,6], ...]}
   input_data = json.loads(input_json)
-
   series_list = [np.array(s) for s in input_data['series']]
 
   orders = []
@@ -28,7 +20,7 @@ def analyze_time_series(input_json: str) -> str:
       'kpss': asdict(order_result.kpss_result),
     })
 
-  # TODO: cointegration and regressions
+  # TODO: cointegration matrix and regression results
 
   result = {
     'series_count': len(series_list),

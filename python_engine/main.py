@@ -5,7 +5,8 @@ from models.responses import ErrorResponse
 from dataclasses import asdict
 
 def main():
-  #input format: {"y": [1,2,3], "x": [4,5,6]}
+  # input format: {"series": [[1,2,3], [4,5,6], ...]}
+  # JSON string to stdout, logs to stderr
   if len(sys.argv) < 2:
     error = ErrorResponse(
       error="NO_INPUT",
