@@ -44,6 +44,7 @@ class IntegrationOrderResult:
   adf_result: AdfTestResult
   kpss_result: KpssTestResult
   has_conflict: bool = False
+  structural_break: Optional[int] = None # structual break index
 
 @dataclass
 class ZivotAndrewsResult:
@@ -65,6 +66,7 @@ class SeriesOrder:
   has_conflict: bool
   adf: AdfTestResult
   kpss: KpssTestResult
+  structural_break: Optional[int] = None
 
 @dataclass
 class AnalysisResult:
