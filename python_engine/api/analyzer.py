@@ -6,7 +6,8 @@ from algorithms.integration import determine_integration_order, log
 from models.responses import (
   SeriesOrder,
   AnalysisResult,
-  ModelType
+  ModelType,
+  IntegrationOrderResult
 )
 
 def analyze_time_series(input_json: str) -> str:
@@ -30,7 +31,7 @@ def analyze_time_series(input_json: str) -> str:
     kpss_regression = "c"
     za_regression = "c"
 
-    order_result = determine_integration_order(
+    order_result: IntegrationOrderResult = determine_integration_order(
       data = series,
       kpss_regression = kpss_regression,
       za_regression = za_regression
@@ -43,7 +44,8 @@ def analyze_time_series(input_json: str) -> str:
         order = order_result.order,
         has_conflict = order_result.has_conflict,
         adf = order_result.adf_result,
-        kpss = order_result.kpss_result
+        kpss = order_result.kpss_result,
+        structural_break = order_result.structural_break
       )
     )
 
