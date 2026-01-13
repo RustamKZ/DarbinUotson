@@ -133,7 +133,7 @@ private fun IntegrationOrderRow(order: Int, hasConflict: Boolean) {
   if (hasConflict) {
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-      "⚠ conflict detected",
+      "conflict detected",
       color = MaterialTheme.colors.error,
       style = MaterialTheme.typography.caption
     )
