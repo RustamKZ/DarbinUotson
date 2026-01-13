@@ -2,103 +2,67 @@ package org.example.project_dw.shared.datasources.python
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.example.project_dw.shared.models.TimeSeriesInput
-import org.example.project_dw.shared.models.FullAnalysisResult
+import org.example.project_dw.shared.models.MultiSeriesInput
+import org.example.project_dw.shared.models.MultiSeriesAnalysisResult
 import java.io.File
 
 class PythonBridge {
+  private val paths = PythonPathResolver.resolve()
 
-    private val paths = PythonPathResolver.resolve()
+  suspend fun analyzeTimeSeries(
+    series: List<DoubleArray>
+  ): Result<MultiSeriesAnalysisResult> = withContext(Dispatchers.IO) {
+    try {
+      val input = MultiSeriesInput(
+        series = series.map { it.toList() }
+      )
 
-    // time series analyzer
-    suspend fun analyzeTimeSeries(
-        y: DoubleArray,
-        x: DoubleArray? = null
-    ): Result<FullAnalysisResult> = withContext(Dispatchers.IO) {
-        try {
-            val input = TimeSeriesInput(
-                y = y.toList(),
-                x = x?.toList()
-            )
+      val inputJson = PythonSerializer.serialize(
+        MultiSeriesInput.serializer(),
+        input
+      )
 
-            val inputJson = PythonSerializer.serialize(
-                TimeSeriesInput.serializer(),
-                input
-            )
+      val output = executePython(inputJson)
 
-            val outputJson = executePython(inputJson)
+      val result = PythonSerializer.deserialize(
+        MultiSeriesAnalysisResult.serializer(),
+        output
+      )
 
-            val result = PythonSerializer.deserialize(
-                FullAnalysisResult.serializer(),
-                outputJson
-            )
+      Result.success(result)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
 
-            Result.success(result)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+  private fun executePython(inputJson: String): String {
+    val file = File(paths.executable)
+    if (!file.exists()) {
+      throw PythonNotFoundException("Python not found: ${paths.executable}")
     }
 
-    private fun executePython(inputJson: String): String {
-        val file = File(paths.executable)
-        if (!file.exists()) {
-            throw PythonNotFoundException("Python not found: ${paths.executable}")
-        }
-
-        val processArgs = if (paths.isProd) {
-            listOf(paths.executable, inputJson)
-        } else {
-            listOf(paths.executable, paths.script, inputJson)
-        }
-
-        val process = ProcessBuilder(processArgs)
-        // neccessary because need to split stderr and stdout
-            .redirectErrorStream(false)
-            .start()
-
-        val output = process.inputStream
-            .bufferedReader()
-            .readText()
-
-        val errorOutput = process.errorStream
-            .bufferedReader()
-            .readText()
-
-        val exitCode = process.waitFor()
-
-        // TODO: debug delete when ready
-        println("=== PYTHON STDOUT ===")
-        println(output)
-        println("=== PYTHON STDERR ===")
-        println(errorOutput)
-        println("=== EXIT CODE: $exitCode ===")
-
-        if (exitCode != 0) {
-            throw PythonExecutionException("Python failed: $output")
-        }
-
-        return output
+    val processArgs = if (paths.isProd) {
+      listOf(paths.executable, inputJson)
+    } else {
+      listOf(paths.executable, paths.script, inputJson)
     }
 
-    private fun validatePythonExists() {
-        val file = File(paths.executable)
-        if (!file.exists()) {
-            val message = if (paths.isProd) {
-                "Production binary not found. Build python runtime first."
-            } else {
-                "Python venv not found. Setup python venv first."
-            }
-            throw PythonNotFoundException("$message\nPath: ${paths.executable}")
-        }
+    val process = ProcessBuilder(processArgs)
+      .redirectErrorStream(false)
+      .start()
+
+    val output = process.inputStream
+      .bufferedReader()
+      .readText()
+
+    val exitCode = process.waitFor()
+
+    if (exitCode != 0) {
+      throw PythonExecutionException("Python failed: $output")
     }
 
-    private fun buildProcessArgs(inputJson: String): List<String> {
-        return if (paths.isProd) {
-            listOf(paths.executable, inputJson)
-        } else {
-            listOf(paths.executable, paths.script, inputJson)
-        }
-    }
+    return output
+  }
 }
 
 class PythonNotFoundException(message: String) : Exception(message)
