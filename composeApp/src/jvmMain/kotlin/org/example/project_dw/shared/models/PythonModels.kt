@@ -4,12 +4,27 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
 @Serializable
-data class DataInput(val values: List<Double>)
+data class TimeSeriesInput(
+    val y: List<Double>,
+    val x: List<Double>? = null
+)
 
 @Serializable
 data class CriticalValues(
     @SerialName("one_percent")
     val onePercent: Double,
+    @SerialName("five_percent")
+    val fivePercent: Double,
+    @SerialName("ten_percent")
+    val tenPercent: Double
+)
+
+@Serializable
+data class KpssCriticalValues(
+    @SerialName("one_percent")
+    val onePercent: Double,
+    @SerialName("two_and_half_percent")
+    val twoAndHalfPercent: Double,
     @SerialName("five_percent")
     val fivePercent: Double,
     @SerialName("ten_percent")
@@ -30,4 +45,29 @@ data class AdfTestResult(
     val criticalValues: CriticalValues,
     @SerialName("is_stationary")
     val isStationary: Boolean
+)
+
+@Serializable
+data class KpssTestResult(
+    @SerialName("kpss_stat")
+    val kpssStat: Double,
+    @SerialName("p_value")
+    val pValue: Double,
+    val lags: Int,
+    val crit: KpssCriticalValues
+)
+
+@Serializable
+data class SeriesAnalysisResult(
+    val order: Int,
+    @SerialName("has_conflict")
+    val hasConflict: Boolean,
+    val adf: AdfTestResult,
+    val kpss: KpssTestResult
+)
+
+@Serializable
+data class FullAnalysisResult(
+    val y: SeriesAnalysisResult,
+    val x: SeriesAnalysisResult? = null
 )

@@ -2,124 +2,104 @@ package org.example.project_dw.shared.datasources.python
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import org.example.project_dw.shared.models.DataInput
-import org.example.project_dw.shared.models.AdfTestResult
+import org.example.project_dw.shared.models.TimeSeriesInput
+import org.example.project_dw.shared.models.FullAnalysisResult
 import java.io.File
 
 class PythonBridge {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val pythonExe: String
-    private val pythonScript: String
-    private val isProd: Boolean
 
-    init {
-        val os = System.getProperty("os.name").lowercase()
-        val projectRoot = findProjectRoot()
+    private val paths = PythonPathResolver.resolve()
 
-        println("PythonBridge: projectRoot = $projectRoot")
-
-        val prodBinary = when {
-            os.contains("win") ->
-                "$projectRoot/python_runtime/windows/stats_engine.exe"
-            else ->
-                "$projectRoot/python_runtime/linux/stats_engine"
-        }
-
-        isProd = File(prodBinary).exists()
-
-        if (isProd) {
-            pythonExe = prodBinary
-            pythonScript = ""
-            println("PythonBridge: PROD mode - $pythonExe")
-        } else {
-            pythonExe = when {
-                os.contains("win") ->
-                    "$projectRoot/python_engine/venv/Scripts/python.exe"
-                else ->
-                    "$projectRoot/python_engine/venv/bin/python"
-            }
-            pythonScript = "$projectRoot/python_engine/main.py"
-            println("PythonBridge: DEV mode - $pythonExe")
-        }
-    }
-
-    private fun findProjectRoot(): String {
-        // for AppImage: executable in lib/app/
-        val userDir = System.getProperty("user.dir")
-
-        val candidates = listOf(
-            File(userDir),                           // DEV: DarbinUotson/
-            File(userDir).parentFile,                // DEV: composeApp/
-            File(userDir).parentFile?.parentFile,    // AppImage: lib/
-            File(userDir, ".."),                     // relative path
-        )
-
-        for (dir in candidates) {
-            if (dir != null && dir.exists()) {
-                if (File(dir, "python_runtime").exists() ||
-                    File(dir, "python_engine").exists()) {
-                    println("Found project root: ${dir.absolutePath}")
-                    return dir.absolutePath
-                }
-            }
-        }
-
-        // fallback
-        return userDir
-    }
-
-    suspend fun runAdfTest(
-        data: DoubleArray
-    ): Result<AdfTestResult> = withContext(Dispatchers.IO) {
+    // time series analyzer
+    suspend fun analyzeTimeSeries(
+        y: DoubleArray,
+        x: DoubleArray? = null
+    ): Result<FullAnalysisResult> = withContext(Dispatchers.IO) {
         try {
-            val input = json.encodeToString(
-                DataInput.serializer(),
-                DataInput(data.toList())
+            val input = TimeSeriesInput(
+                y = y.toList(),
+                x = x?.toList()
             )
-            val output = execute(PythonCommands.ADF_TEST, input)
-            val result = json.decodeFromString(
-                AdfTestResult.serializer(),
-                output
+
+            val inputJson = PythonSerializer.serialize(
+                TimeSeriesInput.serializer(),
+                input
             )
+
+            val outputJson = executePython(inputJson)
+
+            val result = PythonSerializer.deserialize(
+                FullAnalysisResult.serializer(),
+                outputJson
+            )
+
             Result.success(result)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    private fun execute(cmd: String, input: String): String {
-        val file = File(pythonExe)
+    private fun executePython(inputJson: String): String {
+        val file = File(paths.executable)
         if (!file.exists()) {
-            throw Exception(
-                "Python not found: $pythonExe\n" +
-                if (isProd) {
-                    "Build python runtime first"
-                } else {
-                    "Setup python venv first"
-                }
-            )
+            throw PythonNotFoundException("Python not found: ${paths.executable}")
         }
 
-        val processArgs = if (isProd) {
-            listOf(pythonExe, cmd, input)
+        val processArgs = if (paths.isProd) {
+            listOf(paths.executable, inputJson)
         } else {
-            listOf(pythonExe, pythonScript, cmd, input)
+            listOf(paths.executable, paths.script, inputJson)
         }
 
         val process = ProcessBuilder(processArgs)
-            .redirectErrorStream(true)
+        // neccessary because need to split stderr and stdout
+            .redirectErrorStream(false)
             .start()
 
         val output = process.inputStream
             .bufferedReader()
             .readText()
+
+        val errorOutput = process.errorStream
+            .bufferedReader()
+            .readText()
+
         val exitCode = process.waitFor()
 
+        // TODO: debug delete when ready
+        println("=== PYTHON STDOUT ===")
+        println(output)
+        println("=== PYTHON STDERR ===")
+        println(errorOutput)
+        println("=== EXIT CODE: $exitCode ===")
+
         if (exitCode != 0) {
-            throw Exception("Python failed: $output")
+            throw PythonExecutionException("Python failed: $output")
         }
 
         return output
     }
+
+    private fun validatePythonExists() {
+        val file = File(paths.executable)
+        if (!file.exists()) {
+            val message = if (paths.isProd) {
+                "Production binary not found. Build python runtime first."
+            } else {
+                "Python venv not found. Setup python venv first."
+            }
+            throw PythonNotFoundException("$message\nPath: ${paths.executable}")
+        }
+    }
+
+    private fun buildProcessArgs(inputJson: String): List<String> {
+        return if (paths.isProd) {
+            listOf(paths.executable, inputJson)
+        } else {
+            listOf(paths.executable, paths.script, inputJson)
+        }
+    }
 }
+
+class PythonNotFoundException(message: String) : Exception(message)
+class PythonExecutionException(message: String) : Exception(message)
