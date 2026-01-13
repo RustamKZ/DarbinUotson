@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
+from enum import Enum
 
 @dataclass
 class AdfCriticalValues:
@@ -52,3 +53,22 @@ class ZivotAndrewsResult:
   breakpoint: int # a point of structural shift
   critical_values: AdfCriticalValues
   is_stationary: bool
+
+class ModelType(Enum):
+  FULL_STATIONARY = "full_stationary"
+  FULL_NON_STATIONARY = "full_non_stationary"
+  MIXED = "mixed"
+
+@dataclass
+class SeriesOrder:
+  order: int
+  has_conflict: bool
+  adf: AdfTestResult
+  kpss: KpssTestResult
+
+@dataclass
+class AnalysisResult:
+  series_count: int
+  series_orders: list[SeriesOrder]
+  model_type: str # ModelType.value
+  model_results: Optional[dict] = None
