@@ -6,28 +6,26 @@
 DarbinUotson/
 ├── composeApp/
 │   └── src/jvmMain/kotlin/org/example/project_dw/
-│       ├── domain/      # business logic & use cases
-│       ├── shared/      # data layer (repositories, datasources, models)
+│       ├── shared/      # data layer (datasources, models)
 │       ├── presentation/# ui layer (screens, viewmodels)
 │       └── di/          # dependency injection
 ├── python_engine/       # python statistical engine
-│   ├── algorithms/      # statistical tests implementations
-│   ├── api/             # CLI interface
-│   ├── models/          # data models (requests/responses)
+│   ├── algorithms/      # statistical algorithms
+│   ├── api/             # analyzer orchestrator
+│   ├── models/          # data models (responses)
+│   ├── tests/           # pytest tests
 │   ├── main.py          # entry point
+│   ├── check.sh         # test runner
 │   └── venv/            # python virtual environment (gitignored)
 ├── python_runtime/      # compiled python binaries
-│   ├── windows/         # stats_engine.exe (build on Windows)
-│   └── linux/           # stats_engine (build on Linux)
+│   ├── windows/         # stats_engine.exe
+│   └── linux/           # stats_engine
 └── build_scripts/       # build automation scripts
-    ├── build_python_linux.sh
-    ├── build_python_windows.bat
-    └── stats_engine.spec
 ```
 
 **note:** 
 - `python_engine/venv/` is gitignored
-- `python_runtime/` binaries should be committed or built locally
+- `python_runtime/` binaries must be rebuilt after adding dependencies
 
 ## commit rules
 
@@ -44,12 +42,14 @@ DarbinUotson/
 ## build modes
 
 **DEV Mode** (default):
-- Uses `python_engine/venv/bin/python main.py`
+- uses `python_engine/venv/bin/python main.py`
 - activated when `python_runtime/` doesn't exist
+- shows: "PythonPathResolver: DEV mode"
 
 **PROD Mode**:
-- Uses `python_runtime/{os}/stats_engine` binary
-- activated after running build scripts
+- uses `python_runtime/{os}/stats_engine` binary
+- activated when runtime binary exists
+- shows: "PythonPathResolver: PROD mode"
 
 <br/>
 
@@ -71,61 +71,44 @@ pip install -r requirements.txt
 deactivate
 ```
 
-3. make gradlew executable
-``` bash
-cd ..
-chmod +x gradlew
-```
-
-4. run application (DEV mode uses venv automatically)
-``` bash
-./gradlew run
-```
-
-### subsequent runs (development)
+3. run application
 ```bash
-cd ~/code/kotlin/DarbinUotson
+cd ..
 ./gradlew run
 ```
 
-app will auto use python venv in DEV mode no need to enable it
+### running tests
+```bash
+cd python_engine
+source venv/bin/activate
+./check.sh           # if want to run easily
+pytest tests/ -v -s  # start all tests with output manually
+deactivate
+```
+
+### subsequent runs
+```bash
+./gradlew run
+```
 
 ### building production linux package
 
 1. build python binary
 ```bash
 cd build_scripts
-chmod +x build_python_linux.sh
 ./build_python_linux.sh
 ```
 
-2. verify binary works
-``` bash
+2. verify binary
+```bash
 cd ..
-./python_runtime/linux/stats_engine adf_test \
-  '{"values": [1.2, 1.5, 1.3, 1.8, 1.6, 2.1, 1.9, 2.3, 2.0, 2.4]}'
+./python_runtime/linux/stats_engine '{"y": [1.2, 1.5, 1.3, 1.8, 1.6, 2.1]}'
 ```
 
-3. test PROD mode
-should show: "PythonBridge: PROD mode"
-``` bash
-./gradlew run
-```
-
-4. build .AppImage package
-``` bash
+3. build package
+```bash
 ./gradlew packageReleaseAppImage --no-configuration-cache
 ```
-
-5. create distribution archive
-```bash
-cd composeApp/build/compose/binaries/main-release/app
-tar -czf ~/medicaldataanalyzer-1.0.0-linux-x64.tar.gz medicaldataanalyzer/
-```
-
-**Result:** `~/medicaldataanalyzer-1.0.0-linux-x64.tar.gz`
-
-**Usage:** Extract and run `medicaldataanalyzer/bin/medicaldataanalyzer`
 
 <br/>
 
@@ -139,7 +122,7 @@ cd DarbinUotson
 ```
 
 2. setup python environment
-``` bash
+```powershell
 cd python_engine
 python -m venv venv
 venv\Scripts\activate
@@ -147,52 +130,37 @@ pip install -r requirements.txt
 deactivate
 ```
 
-3. run application (DEV mode uses venv automatically)
-``` bash
+3. run application
+```powershell
 cd ..
 .\gradlew.bat run
 ```
 
-### subsequent runs (development)
+### running tests
 ```powershell
-cd C:\path\to\DarbinUotson
-.\gradlew.bat run
+cd python_engine
+venv\Scripts\activate
+pytest tests\ -v -s
+deactivate
 ```
 
-app will auto use python venv in DEV mode.
-
-### building production windows installer
+### building production windows package
 
 1. build python binary
-``` bash
+```powershell
 cd build_scripts
 build_python_windows.bat
 ```
 
-2. Verify binary works
-``` bash
+2. verify binary
+```powershell
 cd ..
-python_runtime\windows\stats_engine.exe adf_test "{\"values\": [1.2, 1.5, 1.3, 1.8, 1.6, 2.1, 1.9, 2.3, 2.0, 2.4]}"
+python_runtime\windows\stats_engine.exe "{\"y\": [1.2, 1.5, 1.3]}"
 ```
 
-3. Test PROD mode
-should show: "PythonBridge: PROD mode"
-``` bash
-.\gradlew.bat run
-```
-
-4. create portable distribution 
-``` bash
+3. create distribution
+```powershell
 .\gradlew.bat createDistributable --no-configuration-cache
 ```
 
-5. create zip archive 
-create ZIP archive for portable distribution
-```powershell
-cd composeApp\build\compose\binaries\main\app
-Compress-Archive -Path medicaldataanalyzer -DestinationPath medicaldataanalyzer-windows-x64.zip
-```
-
-**Result:** `composeApp\build\compose\binaries\main\app\medicaldataanalyzer-windows-x64.zip`
-
-**Usage:** Extract and run `medicaldataanalyzer\bin\medicaldataanalyzer.bat`
+<br/>
