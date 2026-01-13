@@ -1,4 +1,6 @@
+from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class AdfCriticalValues:
@@ -34,3 +36,19 @@ class KpssTestResult:
 class ErrorResponse:
   error: str
   message: str
+
+@dataclass
+class IntegrationOrderResult:
+  order: int # 0 = I(0), 1 = I(1), 2 = I(2)
+  adf_result: AdfTestResult
+  kpss_result: KpssTestResult
+  has_conflict: bool = False
+
+@dataclass
+class ZivotAndrewsResult:
+  test_statistic: float
+  p_value: float
+  used_lag: int
+  breakpoint: int # a point of structural shift
+  critical_values: AdfCriticalValues
+  is_stationary: bool
