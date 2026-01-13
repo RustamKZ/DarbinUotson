@@ -1,6 +1,6 @@
 """
 Args:
-  input_json: {"y": [...], "x": [...]}
+  input_json: {"series": [[...], [...]]}
 
 Returns:
   JSON string with results
@@ -15,27 +15,24 @@ from algorithms.integration import determine_integration_order
 def analyze_time_series(input_json: str) -> str:
   input_data = json.loads(input_json)
 
-  y = np.array(input_data['y'])
-  x = np.array(input_data.get('x')) if 'x' in input_data else None
+  series_list = [np.array(s) for s in input_data['series']]
 
-  y_order = determine_integration_order(y)
+  orders = []
+  for i, series in enumerate(series_list):
+    print(f"\nseries {i+1}", file=sys.stderr)
+    order_result = determine_integration_order(series)
+    orders.append({
+      'order': order_result.order,
+      'has_conflict': order_result.has_conflict,
+      'adf': asdict(order_result.adf_result),
+      'kpss': asdict(order_result.kpss_result),
+    })
+
+  # TODO: cointegration and regressions
 
   result = {
-    'y': {
-      'order': y_order.order,
-      'has_conflict': y_order.has_conflict,
-      'adf': asdict(y_order.adf_result),
-      'kpss': asdict(y_order.kpss_result),
-    }
+    'series_count': len(series_list),
+    'series_orders': orders,
   }
-
-  if x is not None:
-    x_order = determine_integration_order(x)
-    result['x'] = {
-      'order': x_order.order,
-      'has_conflict': x_order.has_conflict,
-      'adf': asdict(x_order.adf_result),
-      'kpss': asdict(x_order.kpss_result),
-    }
 
   return json.dumps(result, default=str)
