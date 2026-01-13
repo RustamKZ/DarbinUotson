@@ -28,10 +28,10 @@ def determine_integration_order(
     if adf_stationary and kpss_stationary:
       log(f"case 1: both stationary I({i})")
       return IntegrationOrderResult(
-        order=i,
-        adf_result=adf,
-        kpss_result=kpss,
-        has_conflict=False
+        order = i,
+        adf_result = adf,
+        kpss_result = kpss,
+        has_conflict = False
       )
 
     elif not adf_stationary and not kpss_stationary:
@@ -43,10 +43,10 @@ def determine_integration_order(
       else:
         log(f"reached max I({max_order})")
         return IntegrationOrderResult(
-          order=max_order,
-          adf_result=adf,
-          kpss_result=kpss,
-          has_conflict=False
+          order = max_order,
+          adf_result = adf,
+          kpss_result = kpss,
+          has_conflict = False
         )
 
     elif not adf_stationary and kpss_stationary:
@@ -59,19 +59,20 @@ def determine_integration_order(
           continue
         else:
           return IntegrationOrderResult(
-            order=max_order,
-            adf_result=adf,
-            kpss_result=kpss,
-            has_conflict=True
+            order = max_order,
+            adf_result = adf,
+            kpss_result = kpss,
+            has_conflict = True
           )
       za = zivot_andrews_test(current_data, trend=za_regression)
       if za.is_stationary:
         log(f"ZA: stat with break at {za.breakpoint}")
         return IntegrationOrderResult(
-          order=i,
-          adf_result=adf,
-          kpss_result=kpss,
-          has_conflict=False
+          order = i,
+          adf_result = adf,
+          kpss_result = kpss,
+          has_conflict = False,
+          structural_break = za.breakpoint if za.breakpoint else None
         )
       else:
         if i < max_order:
@@ -80,10 +81,11 @@ def determine_integration_order(
           continue
         else:
           return IntegrationOrderResult(
-            order=max_order,
-            adf_result=adf,
-            kpss_result=kpss,
-            has_conflict=True
+            order = max_order,
+            adf_result = adf,
+            kpss_result = kpss,
+            has_conflict = True,
+            structural_break = za.breakpoint if za.breakpoint else None
           )
 
     else:
@@ -91,23 +93,23 @@ def determine_integration_order(
       if len(current_data) < MIN_SAMPLE_ZA:
         log(f"ds < {MIN_SAMPLE_ZA}, skip ZA")
         return IntegrationOrderResult(
-          order=i,
-          adf_result=adf,
-          kpss_result=kpss,
-          has_conflict=True
+          order = i,
+          adf_result = adf,
+          kpss_result = kpss,
+          has_conflict = True
         )
       za = zivot_andrews_test(current_data, trend=za_regression)
       log(f"ZA: break at {za.breakpoint}")
       return IntegrationOrderResult(
-        order=i,
-        adf_result=adf,
-        kpss_result=kpss,
-        has_conflict=not za.is_stationary
+        order = i,
+        adf_result = adf,
+        kpss_result = kpss,
+        has_conflict = not za.is_stationary
       )
 
   return IntegrationOrderResult(
-    order=max_order,
-    adf_result=adf,
-    kpss_result=kpss,
-    has_conflict=False
+    order = max_order,
+    adf_result = adf,
+    kpss_result = kpss,
+    has_conflict = False
   )
