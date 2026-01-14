@@ -5,16 +5,30 @@ import androidx.compose.ui.window.application
 import org.koin.core.context.startKoin
 import org.example.project_dw.di.appModule
 import org.example.project_dw.presentation.App
+import co.touchlab.kermit.Logger
+import co.touchlab.kermit.platformLogWriter
 
-fun main() = application {
-    startKoin {
-        modules(appModule)
-    }
+//fun main() = application {
+//    startKoin {
+//        modules(appModule)
+//    }
+//
+//    Window(
+//        onCloseRequest = ::exitApplication,
+//        title = "Medical Data Analyzer"
+//    ) {
+//        App()
+//    }
+//}
 
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "Medical Data Analyzer"
-    ) {
-        App()
+fun main() {
+    Logger.setLogWriters(platformLogWriter())
+    application {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "DarbinUotson",
+        ) {
+            App()
+        }
     }
 }

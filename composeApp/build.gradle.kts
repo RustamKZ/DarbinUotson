@@ -23,12 +23,12 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.voyager.navigator)
             implementation(libs.voyager.transitions)
-
             implementation("io.insert-koin:koin-core:3.5.0")
             implementation("io.insert-koin:koin-compose:1.1.0")
             implementation(
                 "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
             )
+            implementation("co.touchlab:kermit:2.0.4")
         }
 
         commonTest.dependencies {
@@ -107,7 +107,7 @@ afterEvaluate {
 
                     println("=== Python runtime copied! ===")
                 }
-            }
         }
     }
+}
 }
