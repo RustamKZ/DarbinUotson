@@ -22,7 +22,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.voyager.navigator)
             implementation(libs.voyager.transitions)
-
+            implementation("co.touchlab:kermit:2.0.4")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -43,6 +43,9 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "org.example.project_dw"
             packageVersion = "1.0.0"
+            windows {
+                iconFile.set(File("C:\\KMP\\DarbinUotson\\composeApp\\icons\\app_ico.ico"))
+            }
         }
     }
 }
