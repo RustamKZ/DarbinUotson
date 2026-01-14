@@ -17,3 +17,15 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+
+# Python
+python_engine/venv/
+python_engine/__pycache__/
+python_engine/**/__pycache__/
+*.pyc
+*.pyo
+
+# Build artifacts
+build_scripts/build/
+build_scripts/dist/
+build_scripts/__pycache__/
