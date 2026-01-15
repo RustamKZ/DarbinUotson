@@ -16,7 +16,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import org.example.project_dw.test.fill_gaps.JarqueBeraTest
 
 class JarqueBeraScreen(private val viewModel: MainViewModel) : Screen {
     @Composable
@@ -33,7 +32,7 @@ class JarqueBeraScreen(private val viewModel: MainViewModel) : Screen {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(onClick = {
-                    csvData?.let { data -> JarqueBeraTest.jarqueBeraTest(data) }
+                    // csvData?.let { data -> JarqueBeraTest.jarqueBeraTest(data) }
                 }) {
                     Text(text = "Go back")
                 }

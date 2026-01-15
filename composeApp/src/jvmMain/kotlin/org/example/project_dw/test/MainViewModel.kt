@@ -9,10 +9,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.example.project_dw.test.fill_gaps.LinearInterpolation
 import java.io.File
+import kotlin.collections.forEach
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class MainViewModel {
-    var selectedForInterpolation by mutableStateOf(setOf<Int>())
+    var selectedColumns by mutableStateOf(setOf<Int>())
         private set
+    // Числовая матрица
+
+    var jarqueBeraResults by mutableStateOf<Map<Int, JBResult>>(emptyMap())
+        private set
+
+    private val _csvData = MutableStateFlow<CsvData?>(null)
+    val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
 
     private val logger = Logger.withTag("CSV")
 
@@ -20,36 +30,36 @@ class MainViewModel {
     var rawCsv by mutableStateOf<RawCsv?>(null)
         private set
 
-    // Числовая матрица
-    private val _csvData = MutableStateFlow<CsvData?>(null)
-    val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
-
     var error by mutableStateOf<String?>(null)
         private set
 
     var debugInfo by mutableStateOf<String?>(null)
         private set
 
+    data class JBResult(
+        val statistic: Double,
+        val isNormal: Boolean
+    )
+
     fun toggleColumnSelection(index: Int) {
-        selectedForInterpolation = if (selectedForInterpolation.contains(index)) {
-            selectedForInterpolation - index
+        selectedColumns = if (selectedColumns.contains(index)) {
+            selectedColumns - index
         } else {
-            selectedForInterpolation + index
+            selectedColumns + index
         }
     }
 
     fun applyInterpolation() {
         val currentData = _csvData.value ?: return
-        if (selectedForInterpolation.isEmpty()) return
+        if (selectedColumns.isEmpty()) return
 
         // Интерполируем только выбранные
         _csvData.value = LinearInterpolation.interpolateSpecificColumns(
             currentData,
-            selectedForInterpolation.toList()
+            selectedColumns.toList()
         )
 
         // Очищаем выбор после обработки (опционально)
-        selectedForInterpolation = emptySet()
         debugInfo = "Интерполяция применена к выбранным столбцам"
     }
 
@@ -82,5 +92,54 @@ class MainViewModel {
             error = "Failed to extract numeric matrix: ${e.message}"
             logger.e(e) { error ?: "" }
         }
+    }
+
+    fun runJarqueBeraTest() {
+        val currentData = _csvData.value ?: return
+        if (selectedColumns.isEmpty()) return
+
+        val results = mutableMapOf<Int, JBResult>()
+
+        selectedColumns.forEach { columnIndex ->
+            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val result = calculateJarqueBera(columnData)
+            results[columnIndex] = result
+        }
+
+        jarqueBeraResults = results
+    }
+
+    private fun calculateJarqueBera(data: DoubleArray): JBResult {
+        val n = data.size.toDouble()
+        val mean = data.average()
+
+        // Стандартное отклонение s
+        val s = sqrt(data.sumOf { (it - mean).pow(2) } / n)
+
+        logger.d { "Sample size: $n" }
+        logger.d { "Mean: $mean, StdDev: $s" }
+
+        // Skewness (S)
+        val skewness = (data.sumOf { (it - mean).pow(3) } / n) / s.pow(3)
+
+        // Kurtosis (K)
+        val kurtosis = (data.sumOf { (it - mean).pow(4) } / n) / s.pow(4)
+
+        logger.d { "Skewness: $skewness, Kurtosis: $kurtosis" }
+        val jb = (n / 6.0) * (skewness.pow(2) + (kurtosis - 3).pow(2) / 4.0)
+        logger.d { "JB statistic: $jb" }
+
+        val criticalValue = 5.991
+        val isNormal = jb < criticalValue
+
+        return JBResult(jb, isNormal)
+
+        /*
+        Уровень значимости (α) Критическое значение
+        α = 0.10 (90%)         4.605
+        α = 0.05 (95%)         5.991
+        α = 0.01 (99%)         9.210
+        α = 0.001 (99.9%)      13.816
+         */
     }
 }

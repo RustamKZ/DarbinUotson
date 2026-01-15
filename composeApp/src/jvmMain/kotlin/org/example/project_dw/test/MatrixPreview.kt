@@ -26,7 +26,7 @@ fun MatrixPreview(
     val horizontalScrollState = rememberScrollState()
     val columnWidth = 120.dp
 
-    Column(Modifier.padding(16.dp).fillMaxSize()) {
+    Column(Modifier.padding(16.dp).fillMaxWidth(0.5f)) {
         Text("Нажмите на заголовок, чтобы выбрать колонку для интерполяции",
             style = MaterialTheme.typography.bodySmall)
 

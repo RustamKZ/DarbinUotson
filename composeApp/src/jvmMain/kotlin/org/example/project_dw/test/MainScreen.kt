@@ -11,14 +11,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Button
 import androidx.compose.material.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -29,6 +34,7 @@ class MainScreen : Screen {
         val viewModel = remember { MainViewModel() }
         val navigator = LocalNavigator.currentOrThrow
         val csvData by viewModel.csvData.collectAsState()
+        var step1 by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -37,21 +43,17 @@ class MainScreen : Screen {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(16.dp)
             ) {
+                Text("Выбор набора данных", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(onClick = {
                         chooseCsvFile()?.let { viewModel.loadCsv(it) }
                     }) {
                         Text("Выберите набор данных")
-                    }
-                    Button(
-                        onClick = { viewModel.applyInterpolation() },
-                        enabled = viewModel.selectedForInterpolation.isNotEmpty()
-                    ) {
-                        Text("Заполнить пропуски в выбранных (${viewModel.selectedForInterpolation.size})")
                     }
                     Button(
                         onClick = {
@@ -70,13 +72,53 @@ class MainScreen : Screen {
                 viewModel.debugInfo?.let {
                     Text(text = it, color = Color.Blue)
                 }
-
-                csvData?.let { data ->
-                    MatrixPreview(
-                        data = data,
-                        selectedCols = viewModel.selectedForInterpolation,
-                        onColumnClick = { index -> viewModel.toggleColumnSelection(index) }
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    csvData?.let { data ->
+                        MatrixPreview(
+                            data = data,
+                            selectedCols = viewModel.selectedColumns,
+                            onColumnClick = { index -> viewModel.toggleColumnSelection(index) }
+                        )
+                    }
+                    VerticalDivider(color = Color.Black, thickness = 1.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Шаг 1", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    viewModel.applyInterpolation()
+                                    step1 = true
+                                },
+                                enabled = viewModel.selectedColumns.isNotEmpty()
+                            ) {
+                                Text("Заполнить пропуски в выбранных (${viewModel.selectedColumns.size})")
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Шаг 2", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = { viewModel.runJarqueBeraTest() },
+                                enabled = viewModel.selectedColumns.isNotEmpty() and step1,
+                            ) {
+                                Text("Применить тест Жака-Бера")
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        viewModel.jarqueBeraResults.forEach { (columnIndex, result) ->
+                            Text("Column $columnIndex: JB = ${result.statistic}, Normal = ${result.isNormal}")
+                        }
+                    }
                 }
             }
         }
