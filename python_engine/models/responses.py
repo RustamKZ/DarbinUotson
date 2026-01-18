@@ -74,3 +74,40 @@ class AnalysisResult:
   series_orders: list[SeriesOrder]
   model_type: str # ModelType.value
   model_results: Optional[dict] = None
+
+@dataclass
+class AegCritValues:
+  one_percent: float
+  five_percent: float
+  ten_percent: float
+
+@dataclass
+class AegTestResult:
+  coint_t: float
+  p_value: float
+  crit_values: AegCritValues
+
+@dataclass
+class CointegrationTestType(Enum):
+  AEG = "aeg"
+  JOHANSEN = "johansen"
+
+@dataclass
+class CointegrationResult:
+  test_type: CointegrationTestType
+  n_series: int
+  is_cointegrated: bool
+  aeg_result: Optional[AegTestResult] = None
+  johansen_eigenvalues: Optional[list[float]] = None
+  johansen_trace_stats: Optional[list[float]] = None
+  n_cointegration_relations: Optional[int] = None
+
+@dataclass
+class RegressionResult:
+  pass
+
+@dataclass
+class ModelResults:
+  cointegration: Optional[CointegrationResult] = None
+  regression: Optional[RegressionResult] = None
+  error_message: Optional[str ] = None
