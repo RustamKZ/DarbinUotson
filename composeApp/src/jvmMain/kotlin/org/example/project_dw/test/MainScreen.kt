@@ -35,6 +35,7 @@ class MainScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val csvData by viewModel.csvData.collectAsState()
         var step1 by remember { mutableStateOf(false) }
+        var step2 by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -108,7 +109,10 @@ class MainScreen : Screen {
                         ) {
                             Text("Шаг 2", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Button(
-                                onClick = { viewModel.runJarqueBeraTest() },
+                                onClick = {
+                                    viewModel.runJarqueBeraTest()
+                                    step2 = true
+                                },
                                 enabled = viewModel.selectedColumns.isNotEmpty() and step1,
                             ) {
                                 Text("Применить тест Жака-Бера")
@@ -117,6 +121,26 @@ class MainScreen : Screen {
                         Spacer(Modifier.height(16.dp))
                         viewModel.jarqueBeraResults.forEach { (columnIndex, result) ->
                             Text("Column $columnIndex: JB = ${result.statistic}, Normal = ${result.isNormal}")
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Шаг 3", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = { viewModel.runSTLDecomposition(period = 288) }, // 24 часа × 12 записей/час = 288
+                                enabled = viewModel.selectedColumns.isNotEmpty() and step2,
+                            ) {
+                                Text("STL декомпозиция")
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        viewModel.stlResults.forEach { (columnIndex, result) ->
+                            Text("Column $columnIndex:")
+                            Text("  Trend mean: ${result.trend.average()}")
+                            Text("  Seasonal mean: ${result.seasonal.average()}")
+                            Text("  Residual mean: ${result.residual.average()}")
                         }
                     }
                 }

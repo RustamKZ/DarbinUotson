@@ -1,5 +1,6 @@
 package org.example.project_dw.test
 
+import com.github.servicenow.ds.stats.stl.SeasonalTrendLoess
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,6 +22,8 @@ class MainViewModel {
     var jarqueBeraResults by mutableStateOf<Map<Int, JBResult>>(emptyMap())
         private set
 
+    var stlResults by mutableStateOf<Map<Int, STLResult>>(emptyMap())
+
     private val _csvData = MutableStateFlow<CsvData?>(null)
     val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
 
@@ -39,6 +42,12 @@ class MainViewModel {
     data class JBResult(
         val statistic: Double,
         val isNormal: Boolean
+    )
+
+    data class STLResult(
+        val trend: DoubleArray,
+        val seasonal: DoubleArray,
+        val residual: DoubleArray
     )
 
     fun toggleColumnSelection(index: Int) {
@@ -142,4 +151,87 @@ class MainViewModel {
         α = 0.001 (99.9%)      13.816
          */
     }
+
+    fun runSTLDecomposition(period: Int = 288) {
+        val currentData = _csvData.value ?: return
+        if (selectedColumns.isEmpty()) return
+
+        val results = mutableMapOf<Int, STLResult>()
+
+        selectedColumns.forEach { columnIndex ->
+            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val detectedPeriod = if (period == 0) {
+                findPeriod(columnData, maxPeriod = 500)
+            } else {
+                period
+            }
+            try {
+                val result = performSTLDecomposition(columnData, detectedPeriod)
+                results[columnIndex] = result
+
+                logger.d { "Column $columnIndex STL decomposed" }
+                logger.d { "Trend mean: ${result.trend.average()}" }
+                logger.d { "Seasonal mean: ${result.seasonal.average()}" }
+                logger.d { "Residual mean: ${result.residual.average()}" }
+            } catch (e: Exception) {
+                logger.e(e) { "STL decomposition failed for column $columnIndex" }
+            }
+        }
+        stlResults = results
+        debugInfo = "STL декомпозиция выполнена для ${results.size} столбцов"
+    }
+
+    private fun performSTLDecomposition(data: DoubleArray, period: Int = 288): STLResult {
+        val stl = SeasonalTrendLoess.Builder()
+            .setPeriodLength(period)                        // Период сезонности
+            .setSeasonalWidth(10 * period + 1)              // Ширина окна для сезонности
+            .setTrendWidth((1.5 * period).toInt() + 1)      // Ширина окна для тренда
+            /* Кароч это рекомендуемые статьи по STL (Cleveland et al., 1990):
+                - **SeasonalWidth**: `10 * period + 1` - должно быть **нечётным** и больше периода
+                - **TrendWidth**: `1.5 * period + 1` (округлённое до нечётного) - сглаживает тренд*/
+            .setInnerIterations(2)                          // Внутренние итерации
+            .setRobust()
+            .buildSmoother(data)
+
+        // Выполняем декомпозицию
+        val result = stl.decompose()
+
+        return STLResult(
+            trend = result.trend,
+            seasonal = result.seasonal,
+            residual = result.residual
+        )
+    }
+
+    fun findPeriod(data: DoubleArray, maxPeriod: Int = 500): Int {
+        // Простой поиск пиков в автокорреляции
+        val correlations = DoubleArray(maxPeriod)
+
+        for (lag in 1 until maxPeriod) {
+            var sum = 0.0
+            var count = 0
+
+            for (i in 0 until data.size - lag) {
+                sum += data[i] * data[i + lag]
+                count++
+            }
+
+            correlations[lag] = if (count > 0) sum / count else 0.0
+        }
+
+        // Находим максимум после lag=1
+        var maxCorr = correlations[1]
+        var maxLag = 1
+
+        for (lag in 2 until maxPeriod) {
+            if (correlations[lag] > maxCorr) {
+                maxCorr = correlations[lag]
+                maxLag = lag
+            }
+        }
+
+        logger.d { "Detected period: $maxLag with correlation: $maxCorr" }
+        return maxLag
+    }
+
 }

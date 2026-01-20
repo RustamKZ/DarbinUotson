@@ -8,6 +8,12 @@ plugins {
     kotlin("plugin.serialization") version "2.1.0"
 }
 
+repositories {
+    mavenCentral()
+    google()
+    maven { url = uri("https://jitpack.io") }
+}
+
 kotlin {
     jvm()
 
@@ -28,6 +34,7 @@ kotlin {
             implementation(
                 "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
             )
+            implementation("org.apache.commons:commons-math3:3.6.1")
             implementation("co.touchlab:kermit:2.0.4")
         }
 
@@ -38,6 +45,7 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation("com.github.servicenow:stl-decomp-4j:1.0.5")
         }
     }
 }
