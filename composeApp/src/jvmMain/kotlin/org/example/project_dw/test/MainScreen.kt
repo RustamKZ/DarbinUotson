@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import org.example.project_dw.test.plot.openPlotWindow
 
 class MainScreen : Screen {
     @Composable
@@ -141,6 +142,12 @@ class MainScreen : Screen {
                             Text("  Trend mean: ${result.trend.average()}")
                             Text("  Seasonal mean: ${result.seasonal.average()}")
                             Text("  Residual mean: ${result.residual.average()}")
+                            Button(
+                                onClick = { openPlotWindow(viewModel, columnIndex)},
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Text("Посмотреть графики")
+                            }
                         }
                     }
                 }
