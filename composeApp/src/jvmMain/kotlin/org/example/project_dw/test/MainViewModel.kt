@@ -1,0 +1,237 @@
+package org.example.project_dw.test
+
+import com.github.servicenow.ds.stats.stl.SeasonalTrendLoess
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import co.touchlab.kermit.Logger
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.example.project_dw.test.fill_gaps.LinearInterpolation
+import java.io.File
+import kotlin.collections.forEach
+import kotlin.math.pow
+import kotlin.math.sqrt
+
+class MainViewModel {
+    var selectedColumns by mutableStateOf(setOf<Int>())
+        private set
+    // Числовая матрица
+
+    var jarqueBeraResults by mutableStateOf<Map<Int, JBResult>>(emptyMap())
+        private set
+
+    var stlResults by mutableStateOf<Map<Int, STLResult>>(emptyMap())
+
+    private val _csvData = MutableStateFlow<CsvData?>(null)
+    val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
+
+    private val logger = Logger.withTag("CSV")
+
+    // Сырые данные
+    var rawCsv by mutableStateOf<RawCsv?>(null)
+        private set
+
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    var debugInfo by mutableStateOf<String?>(null)
+        private set
+
+    data class JBResult(
+        val statistic: Double,
+        val isNormal: Boolean
+    )
+
+    data class STLResult(
+        val trend: DoubleArray,
+        val seasonal: DoubleArray,
+        val residual: DoubleArray
+    )
+
+    fun toggleColumnSelection(index: Int) {
+        selectedColumns = if (selectedColumns.contains(index)) {
+            selectedColumns - index
+        } else {
+            selectedColumns + index
+        }
+    }
+
+    fun applyInterpolation() {
+        val currentData = _csvData.value ?: return
+        if (selectedColumns.isEmpty()) return
+
+        // Интерполируем только выбранные
+        _csvData.value = LinearInterpolation.interpolateSpecificColumns(
+            currentData,
+            selectedColumns.toList()
+        )
+
+        // Очищаем выбор после обработки (опционально)
+        debugInfo = "Интерполяция применена к выбранным столбцам"
+    }
+
+    // Загружаем CSV
+    fun loadCsv(file: File) {
+        try {
+            val raw = CsvLoader.loadRaw(file)
+            rawCsv = raw
+            debugInfo = "CSV loaded: ${raw.rows.size} rows"
+
+            // Автоматически выбираем все колонки после загрузки
+            val allIndices = raw.headers.indices.toList()
+            selectColumns(allIndices)
+
+            error = null
+        } catch (e: Exception) {
+            error = "Failed to load CSV: ${e.message}"
+        }
+    }
+
+    // Создаём числовую матрицу из выбранных колонок
+    fun selectColumns(selectedColumns: List<Int>) {
+        try {
+            val data = rawCsv?.let { CsvLoader.extractNumericMatrix(it, selectedColumns) }
+            _csvData.value = data
+            debugInfo = "Matrix: ${data?.matrix?.size ?: 0} rows, ${data?.matrix?.get(0)?.size ?: 0} columns"
+            logger.i { debugInfo ?: "" }
+            error = null
+        } catch (e: Exception) {
+            error = "Failed to extract numeric matrix: ${e.message}"
+            logger.e(e) { error ?: "" }
+        }
+    }
+
+    fun runJarqueBeraTest() {
+        val currentData = _csvData.value ?: return
+        if (selectedColumns.isEmpty()) return
+
+        val results = mutableMapOf<Int, JBResult>()
+
+        selectedColumns.forEach { columnIndex ->
+            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val result = calculateJarqueBera(columnData)
+            results[columnIndex] = result
+        }
+
+        jarqueBeraResults = results
+    }
+
+    private fun calculateJarqueBera(data: DoubleArray): JBResult {
+        val n = data.size.toDouble()
+        val mean = data.average()
+
+        // Стандартное отклонение s
+        val s = sqrt(data.sumOf { (it - mean).pow(2) } / n)
+
+        logger.d { "Sample size: $n" }
+        logger.d { "Mean: $mean, StdDev: $s" }
+
+        // Skewness (S)
+        val skewness = (data.sumOf { (it - mean).pow(3) } / n) / s.pow(3)
+
+        // Kurtosis (K)
+        val kurtosis = (data.sumOf { (it - mean).pow(4) } / n) / s.pow(4)
+
+        logger.d { "Skewness: $skewness, Kurtosis: $kurtosis" }
+        val jb = (n / 6.0) * (skewness.pow(2) + (kurtosis - 3).pow(2) / 4.0)
+        logger.d { "JB statistic: $jb" }
+
+        val criticalValue = 5.991
+        val isNormal = jb < criticalValue
+
+        return JBResult(jb, isNormal)
+
+        /*
+        Уровень значимости (α) Критическое значение
+        α = 0.10 (90%)         4.605
+        α = 0.05 (95%)         5.991
+        α = 0.01 (99%)         9.210
+        α = 0.001 (99.9%)      13.816
+         */
+    }
+
+    fun runSTLDecomposition(period: Int = 288) {
+        val currentData = _csvData.value ?: return
+        if (selectedColumns.isEmpty()) return
+
+        val results = mutableMapOf<Int, STLResult>()
+
+        selectedColumns.forEach { columnIndex ->
+            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val detectedPeriod = if (period == 0) {
+                findPeriod(columnData, maxPeriod = 500)
+            } else {
+                period
+            }
+            try {
+                val result = performSTLDecomposition(columnData, detectedPeriod)
+                results[columnIndex] = result
+
+                logger.d { "Column $columnIndex STL decomposed" }
+                logger.d { "Trend mean: ${result.trend.average()}" }
+                logger.d { "Seasonal mean: ${result.seasonal.average()}" }
+                logger.d { "Residual mean: ${result.residual.average()}" }
+            } catch (e: Exception) {
+                logger.e(e) { "STL decomposition failed for column $columnIndex" }
+            }
+        }
+        stlResults = results
+        debugInfo = "STL декомпозиция выполнена для ${results.size} столбцов"
+    }
+
+    private fun performSTLDecomposition(data: DoubleArray, period: Int = 288): STLResult {
+        val stl = SeasonalTrendLoess.Builder()
+            .setPeriodLength(period)                        // Период сезонности
+            .setSeasonalWidth(10 * period + 1)              // Ширина окна для сезонности
+            .setTrendWidth((1.5 * period).toInt() + 1)      // Ширина окна для тренда
+            /* Кароч это рекомендуемые статьи по STL (Cleveland et al., 1990):
+                - **SeasonalWidth**: `10 * period + 1` - должно быть **нечётным** и больше периода
+                - **TrendWidth**: `1.5 * period + 1` (округлённое до нечётного) - сглаживает тренд*/
+            .setInnerIterations(2)                          // Внутренние итерации
+            .setRobust()
+            .buildSmoother(data)
+
+        // Выполняем декомпозицию
+        val result = stl.decompose()
+
+        return STLResult(
+            trend = result.trend,
+            seasonal = result.seasonal,
+            residual = result.residual
+        )
+    }
+
+    fun findPeriod(data: DoubleArray, maxPeriod: Int = 500): Int {
+        // Простой поиск пиков в автокорреляции
+        val correlations = DoubleArray(maxPeriod)
+
+        for (lag in 1 until maxPeriod) {
+            var sum = 0.0
+            var count = 0
+
+            for (i in 0 until data.size - lag) {
+                sum += data[i] * data[i + lag]
+                count++
+            }
+
+            correlations[lag] = if (count > 0) sum / count else 0.0
+        }
+
+        // Находим максимум после lag=1
+        var maxCorr = correlations[1]
+        var maxLag = 1
+
+        for (lag in 2 until maxPeriod) {
+            if (correlations[lag] > maxCorr) {
+                maxCorr = correlations[lag]
+                maxLag = lag
+            }
+        }
+
+        logger.d { "Detected period: $maxLag with correlation: $maxCorr" }
+        return maxLag
+    }
+
+}

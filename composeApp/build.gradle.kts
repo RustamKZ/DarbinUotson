@@ -8,9 +8,14 @@ plugins {
     kotlin("plugin.serialization") version "2.1.0"
 }
 
-kotlin {
-    jvm()
+repositories {
+    mavenCentral()
+    google()
+    maven { url = uri("https://jitpack.io") }
+}
 
+kotlin {
+    jvm() {}
     sourceSets {
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -23,12 +28,13 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.voyager.navigator)
             implementation(libs.voyager.transitions)
-
             implementation("io.insert-koin:koin-core:3.5.0")
             implementation("io.insert-koin:koin-compose:1.1.0")
             implementation(
                 "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
             )
+            implementation("org.apache.commons:commons-math3:3.6.1")
+            implementation("co.touchlab:kermit:2.0.4")
         }
 
         commonTest.dependencies {
@@ -38,6 +44,7 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation("com.github.servicenow:stl-decomp-4j:1.0.5")
         }
     }
 }
@@ -107,7 +114,7 @@ afterEvaluate {
 
                     println("=== Python runtime copied! ===")
                 }
-            }
         }
     }
+}
 }
