@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.material3.VerticalDivider
@@ -37,6 +39,7 @@ class MainScreen : Screen {
         val csvData by viewModel.csvData.collectAsState()
         var step1 by remember { mutableStateOf(false) }
         var step2 by remember { mutableStateOf(false) }
+        var step3 by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -86,7 +89,7 @@ class MainScreen : Screen {
                     }
                     VerticalDivider(color = Color.Black, thickness = 1.dp)
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()),
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -130,7 +133,8 @@ class MainScreen : Screen {
                         ) {
                             Text("Шаг 3", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Button(
-                                onClick = { viewModel.runSTLDecomposition(period = 288) }, // 24 часа × 12 записей/час = 288
+                                onClick = { viewModel.runSTLDecomposition(period = 288)
+                                    step3 = true}, // 24 часа × 12 записей/час = 288
                                 enabled = viewModel.selectedColumns.isNotEmpty() and step2,
                             ) {
                                 Text("STL декомпозиция")
@@ -148,6 +152,26 @@ class MainScreen : Screen {
                             ) {
                                 Text("Посмотреть графики")
                             }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Шаг 4", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = {
+                                    viewModel.detectAndFixOutliers(strategy = "INTERPOLATE")
+                                },
+                                enabled = viewModel.selectedColumns.isNotEmpty() && step3
+                            ) {
+                                Text("Обработать выбросы")
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+
+                        viewModel.outlierResults.forEach { (columnIndex, result) ->
+                            Text("Column $columnIndex: Найдено ${result.outlierIndices.size} выбросов (${result.methodUsed})")
                         }
                     }
                 }

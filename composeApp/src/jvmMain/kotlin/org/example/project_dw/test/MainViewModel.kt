@@ -11,18 +11,29 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.example.project_dw.test.fill_gaps.LinearInterpolation
 import java.io.File
 import kotlin.collections.forEach
+import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
+
+// Этот data class для этапа 5
+data class OutlierResult(
+    val outlierIndices: List<Int>,
+    val methodUsed: String,
+    val cleanData: DoubleArray
+)
 
 class MainViewModel {
     var selectedColumns by mutableStateOf(setOf<Int>())
         private set
     // Числовая матрица
-
+    // этап 3
     var jarqueBeraResults by mutableStateOf<Map<Int, JBResult>>(emptyMap())
         private set
-
+    // этап 4
     var stlResults by mutableStateOf<Map<Int, STLResult>>(emptyMap())
+    // этап 5
+    var outlierResults by mutableStateOf<Map<Int, OutlierResult>>(emptyMap())
+        private set
 
     private val _csvData = MutableStateFlow<CsvData?>(null)
     val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
@@ -232,6 +243,75 @@ class MainViewModel {
 
         logger.d { "Detected period: $maxLag with correlation: $maxCorr" }
         return maxLag
+    }
+
+    // ЭТАП 5
+
+    fun detectAndFixOutliers(strategy: String = "INTERPOLATE") {
+        val currentData = _csvData.value ?: return
+        val results = mutableMapOf<Int, OutlierResult>()
+
+        selectedColumns.forEach { columnIndex ->
+            val stl = stlResults[columnIndex] ?: return@forEach
+            val isNormal = jarqueBeraResults[columnIndex]?.isNormal ?: false
+            val residuals = stl.residual
+
+            // 1. Поиск индексов выбросов
+            val outlierIndices = if (isNormal) {
+                findOutliersZScore(residuals)
+            } else {
+                findOutliersIQR(residuals)
+            }
+
+            // 2. Обработка (удаление / интерполяция)
+            // Работаем с исходным рядом, заменяя значения по индексам выбросов
+            val originalData = currentData.matrix.map { it[columnIndex] }.toDoubleArray()
+            val fixedData = applyOutlierStrategy(originalData, outlierIndices, strategy)
+
+            results[columnIndex] = OutlierResult(
+                outlierIndices = outlierIndices,
+                methodUsed = if (isNormal) "Z-Score" else "IQR",
+                cleanData = fixedData
+            )
+        }
+        outlierResults = results
+    }
+
+    private fun findOutliersZScore(data: DoubleArray, threshold: Double = 3.5): List<Int> {
+        val mean = data.average()
+        val stdDev = sqrt(data.map { (it - mean).pow(2) }.average())
+        return data.indices.filter { abs(data[it] - mean) > threshold * stdDev }
+    }
+
+    private fun findOutliersIQR(data: DoubleArray): List<Int> {
+        val sorted = data.sorted()
+        val q1 = sorted[(sorted.size * 0.25).toInt()]
+        val q3 = sorted[(sorted.size * 0.75).toInt()]
+        val iqr = q3 - q1
+        val lowerBound = q1 - 1.5 * iqr
+        val upperBound = q3 + 1.5 * iqr
+        return data.indices.filter { data[it] < lowerBound || data[it] > upperBound }
+    }
+
+    private fun applyOutlierStrategy(data: DoubleArray, indices: List<Int>, strategy: String): DoubleArray {
+        val result = data.copyOf()
+        val indexSet = indices.toSet()
+        when (strategy) {
+            "WINSORIZE" -> {
+                // Замена на граничные значения (упрощенно: на медиану или ближайший предел)
+                val median = data.sorted()[data.size / 2]
+                indices.forEach { result[it] = median }
+            }
+            "INTERPOLATE" -> {
+                // Замена на среднее между соседями
+                indices.forEach { i ->
+                    val prev = if (i > 0) result[i-1] else result.firstOrNull { !indexSet.contains(it.toInt()) } ?: 0.0
+                    val next = if (i < result.size - 1) result[i+1] else prev
+                    result[i] = (prev.toDouble() + next.toDouble()) / 2.0
+                }
+            }
+        }
+        return result
     }
 
 }
