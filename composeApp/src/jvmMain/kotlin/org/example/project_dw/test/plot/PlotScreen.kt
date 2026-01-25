@@ -47,6 +47,7 @@ import javax.swing.WindowConstants
 @Composable
 fun PlotScreenContent(viewModel: MainViewModel, columnIndex: Int) {
     val stlResult = viewModel.stlResults[columnIndex]
+    val outlierResult = viewModel.outlierResults[columnIndex]
 
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally
@@ -71,8 +72,19 @@ fun PlotScreenContent(viewModel: MainViewModel, columnIndex: Int) {
                     )
 
                     StlChartCard(
-                        title = "Остаток", data = stlResult.residual, lineColor = Color(0xFFC62828), dashed = true
+                        title = "Остаток",
+                        data = stlResult.residual,
+                        lineColor = Color(0xFFC62828),
+                        dashed = true,
+                        outlierIndices = outlierResult?.outlierIndices
                     )
+                    if (outlierResult != null) {
+                        StlChartCard(
+                            title = "Очищенный ряд (Интерполяция)",
+                            data = outlierResult.cleanData,
+                            lineColor = Color.Black
+                        )
+                    }
                 }
             } else {
                 Text("Данные STL не найдены")
@@ -88,7 +100,8 @@ fun StlChartCard(
     data: DoubleArray,
     lineColor: Color,
     dashed: Boolean = false,
-    maxPoints: Int = 2000
+    maxPoints: Int = 2000,
+    outlierIndices: List<Int>? = null
 ) {
     if (data.isEmpty()) return
 
@@ -240,6 +253,76 @@ fun StlChartCard(
                             } else null
                         )
                     )
+                    if (title == "Остаток" && outlierIndices != null) {
+                        outlierIndices.forEach { index ->
+                            // Важно: если вы используете maxPoints (даунсэмплинг),
+                            // нужно сопоставить индекс оригинала с индексом на экране.
+                            val step = if (data.size > maxPoints) data.size / maxPoints else 1
+                            val displayIndex = index / step
+
+                            // Рисуем только если точка попала в выборку или мы отображаем всё
+                            if (index % step == 0 || data.size <= maxPoints) {
+                                val x = paddingLeft + offsetX + (stepX * displayIndex)
+                                val y = yToPx(data[index])
+
+                                drawCircle(
+                                    color = Color.Yellow, // Желтый ободок для видимости
+                                    radius = 6f,
+                                    center = Offset(x, y)
+                                )
+                                drawCircle(
+                                    color = Color.Red,
+                                    radius = 4f,
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+                    }
+                    /* Это как второй вариант надо протестировать будет
+                    * if (title == "Остаток" && outlierIndices != null) {
+                        outlierIndices.forEach { originalIndex ->
+                            // Считаем X на основе позиции в ОРИГИНАЛЬНОМ массиве (data.size)
+                            // Это гарантирует, что точка будет на своем временном отрезке
+                            val xFraction = originalIndex.toFloat() / (data.size - 1).coerceAtLeast(1)
+                            val x = paddingLeft + offsetX + (xFraction * chartWidth)
+
+                            // Y берем из ОРИГИНАЛЬНЫХ данных
+                            val y = yToPx(data[originalIndex])
+
+                            // Рисуем, только если точка входит в видимую область (из-за offsetX и scale)
+                            if (x in paddingLeft..(size.width - paddingRight)) {
+                                drawCircle(
+                                    color = Color.Yellow,
+                                    radius = 5f,
+                                    center = Offset(x, y)
+                                )
+                                drawCircle(
+                                    color = Color.Red,
+                                    radius = 3f,
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+                     } */
+
+                    /* Еще один вариант
+                    * if (title == "Остаток" && outlierIndices != null) {
+                        // Группируем выбросы по экранным пикселям, чтобы не рисовать 1.5 млн кругов
+                        val step = if (data.size > maxPoints) data.size / maxPoints else 1
+
+                        val groupedOutliers = outlierIndices
+                            .groupBy { it / step } // Группируем по displayIndex
+                            .mapValues { entry -> entry.value.maxBy { abs(data[it]) } } // Берем самый экстремальный выброс в этом шаге
+
+                        groupedOutliers.forEach { (displayIndex, originalIndex) ->
+                            val x = paddingLeft + offsetX + (stepX * displayIndex)
+                            val y = yToPx(data[originalIndex])
+
+                            drawCircle(color = Color.Yellow, radius = 5f, center = Offset(x, y))
+                            drawCircle(color = Color.Red, radius = 3f, center = Offset(x, y))
+                        }
+                    }
+                    * */
                 }
 
                 // === AXES (рисуем поверх всего) ===
