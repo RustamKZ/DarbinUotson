@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from dataclasses import asdict
 from typing import Optional
-
+from statsmodels.tsa.vector_ar.vecm import JohansenTestResult
 from algorithms.integration import determine_integration_order, log
 from algorithms.cointegration_tests import aeg_test, johansen_test
 from models.responses import (
@@ -17,7 +17,8 @@ from models.responses import (
   PeriodType,
   PeriodModelResult,
   StructuralBreak,
-  PeriodInfo
+  PeriodInfo,
+  AegTestResult
 )
 from models.domain import (
   PreparedData,
@@ -333,7 +334,7 @@ def _check_cointegration(
   n_series = len(series_list)
 
   if n_series == 2:
-    aeg_result = aeg_test(series_list, regression = regression)
+    aeg_result: AegTestResult = aeg_test(series_list, regression = regression)
     is_cointegrated = aeg_result.p_value < 0.05
 
     log(f"AEG: p = {aeg_result.p_value:.4f}, coint = {is_cointegrated}")
@@ -345,7 +346,7 @@ def _check_cointegration(
       aeg_result = aeg_result
     )
   else:
-    johansen_result = johansen_test(series_list, regression = regression)
+    johansen_result: JohansenTestResult = johansen_test(series_list, regression = regression)
 
     num_coint = 0
     for i in range(len(johansen_result.lr1)):
