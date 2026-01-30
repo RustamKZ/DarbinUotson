@@ -44,7 +44,7 @@ class IntegrationOrderResult:
   adf_result: AdfTestResult
   kpss_result: KpssTestResult
   has_conflict: bool = False
-  structural_break: Optional[int] = None # structual break index
+  structural_break: Optional[int] = None # structural break index
 
 @dataclass
 class ZivotAndrewsResult:
@@ -67,13 +67,6 @@ class SeriesOrder:
   adf: AdfTestResult
   kpss: KpssTestResult
   structural_break: Optional[int] = None
-
-@dataclass
-class AnalysisResult:
-  series_count: int
-  series_orders: list[SeriesOrder]
-  model_type: str # ModelType.value
-  model_results: Optional[dict] = None
 
 @dataclass
 class AegCritValues:
@@ -103,11 +96,71 @@ class CointegrationResult:
   n_cointegration_relations: Optional[int] = None
 
 @dataclass
+class DurbinWatsonResult:
+  statistic: float
+  has_autocorrelation: bool
+
+@dataclass
 class RegressionResult:
-  pass
+  coefficients: list[float]
+  std_errors: list[float]
+  t_values: list[float]
+  p_values: list[float]
+  r_squared: float
+  adj_r_squared: float
+  f_statistic: float
+  f_pvalue: float
+  durbin_watson: DurbinWatsonResult
+  n_obs: int
+  has_lags: bool = False
+  uses_newey_west: bool = False
+
+class PeriodType(Enum):
+  BEFORE_BREAK = "before_break"
+  AFTER_BREAK = "after_break"
+  CUSTOM = "custom" # for the cases with several structural breaks
+
+@dataclass
+class PeriodModelResult:
+  period_type: PeriodType
+  model_type: str # ModelType.value
+  data_size: int
+  series_orders: list[SeriesOrder]
+  period_number: Optional[int] = None
+  start_index: Optional[int] = None
+  end_index: Optional[int] = None
+  cointegration: Optional[CointegrationResult] = None
+  regression: Optional[RegressionResult] = None
+  error_message: Optional[str] = None
+
+@dataclass
+class StructuralBreak:
+  index: int
+  series_index: int
+
+@dataclass
+class PeriodInfo:
+  period_number: int
+  start_index: int
+  end_index: int
+  data_size: int
 
 @dataclass
 class ModelResults:
   cointegration: Optional[CointegrationResult] = None
   regression: Optional[RegressionResult] = None
   error_message: Optional[str ] = None
+  has_structural_break: bool = False
+  # for several structural breaks
+  structural_breaks: Optional[list[StructuralBreak]] = None
+  periods: Optional[list[PeriodInfo]] = None
+  period_results: Optional[list[PeriodModelResult]] = None
+
+@dataclass
+class AnalysisResult:
+  series_count: int
+  series_orders: list[SeriesOrder]
+  model_type: str
+  model_results: Optional[dict] = None
+  has_structural_break: bool = False
+  structural_breaks: Optional[list[StructuralBreak]] = None
