@@ -36,11 +36,18 @@ fun MatrixPreview(
                     Row {
                         data.headers.forEachIndexed { index, header ->
                             val isSelected = selectedCols.contains(index)
+                            val isNumeric = data.isNumericColumn(index)
+                            val bg = when {
+                                !isNumeric -> Color(0xFFE0E0E0)              // текстовый столбец
+                                isSelected -> Color(0xFFBBDEFB)             // выбранный numeric
+                                else -> Color.Transparent
+                            }
+                            val textColor = if (isNumeric) Color.Black else Color.Gray
                             Box(
                                 modifier = Modifier
                                     .width(columnWidth)
-                                    .background(if (isSelected) Color(0xFFBBDEFB) else Color.Transparent)
-                                    .clickable { onColumnClick(index) }
+                                    .background(bg)
+                                    .clickable(enabled = isNumeric) { onColumnClick(index) }
                                     .padding(8.dp)
                             ) {
                                 Text(header, fontWeight = FontWeight.Bold)
@@ -54,13 +61,17 @@ fun MatrixPreview(
                     Row {
                         row.forEachIndexed { index, value ->
                             val isSelected = selectedCols.contains(index)
+
+                            val text = value.asDisplayText()
+                            val isBad = value.isBadNumberOrText()
+
                             Text(
-                                text = if (value.isNaN()) "NaN" else "%.4f".format(value),
+                                text = text,
                                 modifier = Modifier
                                     .width(columnWidth)
                                     .background(if (isSelected) Color(0xFFE3F2FD) else Color.Transparent)
                                     .padding(8.dp),
-                                color = if (value.isNaN()) Color.Red else Color.Black
+                                color = if (isBad) Color.Red else Color.Black
                             )
                         }
                     }

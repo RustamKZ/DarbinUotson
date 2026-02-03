@@ -40,6 +40,10 @@ class MainScreen : Screen {
         var step1 by remember { mutableStateOf(false) }
         var step2 by remember { mutableStateOf(false) }
         var step3 by remember { mutableStateOf(false) }
+
+        // для выбора страны
+        var showCountryDialog by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -65,8 +69,15 @@ class MainScreen : Screen {
                             navigator.push(JarqueBeraScreen(viewModel))
                         },
                     ) {
-                        Text("Далее")
+                        Text("Далее (TEST)")
                     }
+                    Button(
+                        onClick = { showCountryDialog = true },
+                        enabled = csvData != null
+                    ) {
+                        Text(viewModel.selectedCountry?.let { "Страна: $it" } ?: "Выбрать страну")
+                    }
+
                 }
                 Spacer(Modifier.height(16.dp))
 
@@ -133,7 +144,7 @@ class MainScreen : Screen {
                         ) {
                             Text("Шаг 3", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Button(
-                                onClick = { viewModel.runSTLDecomposition(period = 288)
+                                onClick = { viewModel.runSTLDecomposition(period = 52)
                                     step3 = true}, // 24 часа × 12 записей/час = 288
                                 enabled = viewModel.selectedColumns.isNotEmpty() and step2,
                             ) {
@@ -173,7 +184,41 @@ class MainScreen : Screen {
                         viewModel.outlierResults.forEach { (columnIndex, result) ->
                             Text("Column $columnIndex: Найдено ${result.outlierIndices.size} выбросов (${result.methodUsed})")
                         }
+                        if (viewModel.selectedColumns.size > 2) {
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Шаг 5", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = {
+                                        viewModel.detectAndFixOutliers(strategy = "INTERPOLATE")
+                                    },
+                                    enabled = viewModel.selectedColumns.isNotEmpty() && step3 && viewModel.selectedColumns.size > 2
+                                ) {
+                                    Text("Проверка мультиколлинеарности VIF")
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+
+                            viewModel.outlierResults.forEach { (columnIndex, result) ->
+                                Text("Column $columnIndex: Найдено ${result.outlierIndices.size} выбросов (${result.methodUsed})")
+                            }
+                        }
                     }
+                }
+                if (showCountryDialog) {
+                    val countries = viewModel.availableCountries()
+
+                    CountryPickerDialog(
+                        countries = countries,
+                        onPick = { chosen ->
+                            viewModel.selectCountry(chosen)
+                            showCountryDialog = false
+                        },
+                        onDismiss = { showCountryDialog = false }
+                    )
                 }
             }
         }

@@ -13,8 +13,49 @@ data class RawCsv(
 // Для матрицы чисел после выбора колонок
 data class CsvData(
     val headers: List<String>,
-    val matrix: List<DoubleArray>
+    val matrix: List<List<CsvValue>>
 )
+
+sealed class CsvValue {
+    data class Num(val value: Double) : CsvValue()
+    data class Text(val value: String) : CsvValue()
+}
+
+fun CsvValue.asDoubleOrNaN(): Double = when (this) {
+    is CsvValue.Num -> value
+    is CsvValue.Text -> value.toDoubleOrNull() ?: Double.NaN
+}
+
+fun CsvValue.asDisplayText(): String = when (this) {
+    is CsvValue.Num -> if (value.isNaN()) "NaN" else "%.4f".format(value)
+    is CsvValue.Text -> value
+}
+
+fun CsvValue.isBadNumberOrText(): Boolean = when (this) {
+    is CsvValue.Num -> value.isNaN()
+    is CsvValue.Text -> true // строка — не число
+}
+
+fun CsvData.isNumericColumn(col: Int): Boolean {
+    if (matrix.isEmpty()) return false
+    if (col !in matrix.first().indices) return false
+    return matrix.all { row ->
+        when (val v = row[col]) {
+            is CsvValue.Num -> true
+            is CsvValue.Text -> v.value.toDoubleOrNull() != null
+        }
+    }
+}
+
+fun CsvValue.asString(): String = when (this) {
+    is CsvValue.Num -> value.toString()
+    is CsvValue.Text -> value
+}
+
+fun CsvData.columnIndexOrNull(name: String): Int? =
+    headers.indexOfFirst { it.equals(name, ignoreCase = true) }
+        .takeIf { it >= 0 }
+
 
 object CsvLoader {
 
@@ -47,10 +88,12 @@ object CsvLoader {
     // Шаг 2: преобразование выбранных колонок в числовую матрицу
     fun extractNumericMatrix(raw: RawCsv, selectedColumns: List<Int>): CsvData {
         val matrix = raw.rows.map { row ->
-            DoubleArray(selectedColumns.size) { i ->
-                row[selectedColumns[i]].toDoubleOrNaN()
+            selectedColumns.map { colIndex ->
+                val cell = row[colIndex]
+                cell.toDoubleOrNull()?.let { CsvValue.Num(it) }
+                    ?: CsvValue.Text(cell)
             }
-        }.toList()
+        }
 
         val headers = selectedColumns.map { raw.headers[it] }
         return CsvData(headers, matrix)

@@ -100,7 +100,7 @@ fun StlChartCard(
     data: DoubleArray,
     lineColor: Color,
     dashed: Boolean = false,
-    maxPoints: Int = 2000,
+    maxPoints: Int = 14100,
     outlierIndices: List<Int>? = null
 ) {
     if (data.isEmpty()) return

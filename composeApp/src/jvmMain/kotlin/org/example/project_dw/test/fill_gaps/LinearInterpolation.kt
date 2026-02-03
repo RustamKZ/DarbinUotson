@@ -1,26 +1,42 @@
 package org.example.project_dw.test.fill_gaps
 
 import org.example.project_dw.test.CsvData
+import org.example.project_dw.test.CsvValue
+import org.example.project_dw.test.asDoubleOrNaN
 import kotlin.math.pow
 
 object LinearInterpolation {
 
     // Линейная интерполяция
     fun interpolateSpecificColumns(data: CsvData, targetIndices: List<Int>): CsvData {
-        val newMatrix: List<DoubleArray> = data.matrix.map { it.copyOf() }.toList()
+        val newMatrix: MutableList<MutableList<CsvValue>> =
+            data.matrix.map { it.toMutableList() }.toMutableList()
 
-        // Проходим только по тем индексам, которые выбрал пользователь
+        val rowCount = newMatrix.size
+        val colCount = newMatrix.firstOrNull()?.size ?: 0
+        if (rowCount == 0 || colCount == 0) return data
+
         for (colIdx in targetIndices) {
-            if (colIdx in 0 until (newMatrix.getOrNull(0)?.size ?: 0)) {
-                val columnData = DoubleArray(newMatrix.size) { row -> newMatrix[row][colIdx] }
-                fillMissingValuesLinear(columnData)
-
-                for (row in newMatrix.indices) {
-                    newMatrix[row][colIdx] = columnData[row]
+            if (colIdx !in 0 until colCount) continue
+            val isTextColumn = newMatrix.any { row ->
+                val v = row[colIdx]
+                when (v) {
+                    is CsvValue.Num -> false
+                    is CsvValue.Text -> v.value.toDoubleOrNull() == null
                 }
             }
+            if (isTextColumn) continue
+
+            val columnData = DoubleArray(rowCount) { r ->
+                newMatrix[r][colIdx].asDoubleOrNaN()
+            }
+            fillMissingValuesLinear(columnData)
+            for (r in 0 until rowCount) {
+                newMatrix[r][colIdx] = CsvValue.Num(columnData[r])
+            }
         }
-        return data.copy(matrix = newMatrix)
+
+        return data.copy(matrix = newMatrix.map { it.toList() })
     }
 
     fun fillMissingValuesLinear(data: DoubleArray) {

@@ -35,6 +35,10 @@ class MainViewModel {
     var outlierResults by mutableStateOf<Map<Int, OutlierResult>>(emptyMap())
         private set
 
+    // для выбора страны
+    var selectedCountry by mutableStateOf<String?>(null)
+        private set
+
     private val _csvData = MutableStateFlow<CsvData?>(null)
     val csvData: StateFlow<CsvData?> = _csvData.asStateFlow()
 
@@ -60,8 +64,45 @@ class MainViewModel {
         val seasonal: DoubleArray,
         val residual: DoubleArray
     )
+    // для выбора страны
+    fun availableCountries(): List<String> {
+        val data = _csvData.value ?: return emptyList()
+        val countryCol = data.columnIndexOrNull("country_name") ?: return emptyList()
+
+        return data.matrix
+            .mapNotNull { row -> row.getOrNull(countryCol)?.asString()?.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+
+    fun selectCountry(country: String) {
+        val current = _csvData.value ?: return
+        val countryCol = current.columnIndexOrNull("country_name")
+            ?: run {
+                error = "Column 'country_name' not found"
+                return
+            }
+
+        val filteredMatrix = current.matrix.filter { row ->
+            row.getOrNull(countryCol)?.asString()?.trim() == country
+        }
+
+        _csvData.value = current.copy(matrix = filteredMatrix)
+        selectedCountry = country
+        selectedColumns = emptySet()
+        jarqueBeraResults = emptyMap()
+        stlResults = emptyMap()
+        outlierResults = emptyMap()
+
+        debugInfo = "Фильтр применён: $country (rows=${filteredMatrix.size})"
+    }
+
 
     fun toggleColumnSelection(index: Int) {
+        val data = csvData.value ?: return
+        if (!data.isNumericColumn(index)) return
+
         selectedColumns = if (selectedColumns.contains(index)) {
             selectedColumns - index
         } else {
@@ -121,7 +162,7 @@ class MainViewModel {
         val results = mutableMapOf<Int, JBResult>()
 
         selectedColumns.forEach { columnIndex ->
-            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val columnData = currentData.matrix.map { row -> row[columnIndex].asDoubleOrNaN() }.toDoubleArray()
             val result = calculateJarqueBera(columnData)
             results[columnIndex] = result
         }
@@ -170,7 +211,7 @@ class MainViewModel {
         val results = mutableMapOf<Int, STLResult>()
 
         selectedColumns.forEach { columnIndex ->
-            val columnData = currentData.matrix.map { row -> row[columnIndex] }.toDoubleArray()
+            val columnData = currentData.matrix.map { row -> row[columnIndex].asDoubleOrNaN() }.toDoubleArray()
             val detectedPeriod = if (period == 0) {
                 findPeriod(columnData, maxPeriod = 500)
             } else {
@@ -185,26 +226,55 @@ class MainViewModel {
                 logger.d { "Seasonal mean: ${result.seasonal.average()}" }
                 logger.d { "Residual mean: ${result.residual.average()}" }
             } catch (e: Exception) {
-                logger.e(e) { "STL decomposition failed for column $columnIndex" }
+                logger.e(e) {
+                    "STL decomposition failed for column $columnIndex; " +
+                            "n=${columnData.size}, period=$detectedPeriod, " +
+                            "nanCount=${columnData.count { it.isNaN() }}, " +
+                            "infCount=${columnData.count { !it.isFinite() }}"
+                }
+                error = "STL failed: col=$columnIndex (${e.message})"
             }
         }
         stlResults = results
         debugInfo = "STL декомпозиция выполнена для ${results.size} столбцов"
     }
 
+    private fun oddAtMost(x: Int, max: Int): Int {
+        var v = minOf(x, max)
+        if (v % 2 == 0) v -= 1
+        return v.coerceAtLeast(3) // минимально разумное нечётное
+    }
+
+
     private fun performSTLDecomposition(data: DoubleArray, period: Int = 288): STLResult {
+        val n = data.size
+
+        // период должен быть хотя бы 2 и меньше n
+        val safePeriod = period.coerceIn(2, n - 1)
+
+        // Максимально допустимая ширина окна (нечётная и <= n-1)
+        val maxWidth = if ((n - 1) % 2 == 1) (n - 1) else (n - 2)
+
+        // Было: 10*period+1 (слишком много). Делаем безопасно:
+        val seasonalTarget = 10 * safePeriod + 1
+        val seasonalWidth = oddAtMost(seasonalTarget, maxWidth)
+
+        // Тренд тоже клампим
+        val trendTarget = (1.5 * safePeriod).toInt() + 1
+        val trendWidth = oddAtMost(trendTarget, maxWidth)
+
+        logger.d {
+            "STL params: n=$n period=$safePeriod seasonalWidth=$seasonalWidth trendWidth=$trendWidth"
+        }
+
         val stl = SeasonalTrendLoess.Builder()
-            .setPeriodLength(period)                        // Период сезонности
-            .setSeasonalWidth(10 * period + 1)              // Ширина окна для сезонности
-            .setTrendWidth((1.5 * period).toInt() + 1)      // Ширина окна для тренда
-            /* Кароч это рекомендуемые статьи по STL (Cleveland et al., 1990):
-                - **SeasonalWidth**: `10 * period + 1` - должно быть **нечётным** и больше периода
-                - **TrendWidth**: `1.5 * period + 1` (округлённое до нечётного) - сглаживает тренд*/
-            .setInnerIterations(2)                          // Внутренние итерации
+            .setPeriodLength(safePeriod)
+            .setSeasonalWidth(seasonalWidth)
+            .setTrendWidth(trendWidth)
+            .setInnerIterations(2)
             .setRobust()
             .buildSmoother(data)
 
-        // Выполняем декомпозицию
         val result = stl.decompose()
 
         return STLResult(
@@ -213,6 +283,7 @@ class MainViewModel {
             residual = result.residual
         )
     }
+
 
     fun findPeriod(data: DoubleArray, maxPeriod: Int = 500): Int {
         // Простой поиск пиков в автокорреляции
@@ -265,7 +336,7 @@ class MainViewModel {
 
             // 2. Обработка (удаление / интерполяция)
             // Работаем с исходным рядом, заменяя значения по индексам выбросов
-            val originalData = currentData.matrix.map { it[columnIndex] }.toDoubleArray()
+            val originalData = currentData.matrix.map { it[columnIndex].asDoubleOrNaN() }.toDoubleArray()
             val fixedData = applyOutlierStrategy(originalData, outlierIndices, strategy)
 
             results[columnIndex] = OutlierResult(
@@ -298,12 +369,10 @@ class MainViewModel {
         val indexSet = indices.toSet()
         when (strategy) {
             "WINSORIZE" -> {
-                // Замена на граничные значения (упрощенно: на медиану или ближайший предел)
                 val median = data.sorted()[data.size / 2]
                 indices.forEach { result[it] = median }
             }
             "INTERPOLATE" -> {
-                // Замена на среднее между соседями
                 indices.forEach { i ->
                     val prev = if (i > 0) result[i-1] else result.firstOrNull { !indexSet.contains(it.toInt()) } ?: 0.0
                     val next = if (i < result.size - 1) result[i+1] else prev
