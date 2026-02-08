@@ -2,30 +2,38 @@ package org.example.project_dw.shared.datasources.python
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.example.project_dw.shared.models.MultiSeriesInput
-import org.example.project_dw.shared.models.MultiSeriesAnalysisResult
+import org.example.project_dw.shared.models.TimeSeriesRequest
+import org.example.project_dw.shared.models.TimeSeriesAnalysisResult
+import org.example.project_dw.shared.models.ApiError
 import java.io.File
 
 class PythonBridge {
   private val paths = PythonPathResolver.resolve()
 
   suspend fun analyzeTimeSeries(
-    series: List<DoubleArray>
-  ): Result<MultiSeriesAnalysisResult> = withContext(Dispatchers.IO) {
+    request: TimeSeriesRequest
+  ): Result<TimeSeriesAnalysisResult> = withContext(Dispatchers.IO) {
     try {
-      val input = MultiSeriesInput(
-        series = series.map { it.toList() }
-      )
-
       val inputJson = PythonSerializer.serialize(
-        MultiSeriesInput.serializer(),
-        input
+        TimeSeriesRequest.serializer(),
+        request
       )
 
       val output = executePython(inputJson)
 
+      // Проверяем: ошибка или успех?
+      if (output.contains("\"error\"")) {
+        val error = PythonSerializer.deserialize(
+          ApiError.serializer(),
+          output
+        )
+        return@withContext Result.failure(
+          PythonApiException(error.error, error.message)
+        )
+      }
+
       val result = PythonSerializer.deserialize(
-        MultiSeriesAnalysisResult.serializer(),
+        TimeSeriesAnalysisResult.serializer(),
         output
       )
 
@@ -56,10 +64,16 @@ class PythonBridge {
       .bufferedReader()
       .readText()
 
+    val errors = process.errorStream
+      .bufferedReader()
+      .readText()
+
     val exitCode = process.waitFor()
 
     if (exitCode != 0) {
-      throw PythonExecutionException("Python failed: $output")
+      throw PythonExecutionException(
+        "Python failed with exit code $exitCode\nStdout: $output\nStderr: $errors"
+      )
     }
 
     return output
@@ -68,3 +82,4 @@ class PythonBridge {
 
 class PythonNotFoundException(message: String) : Exception(message)
 class PythonExecutionException(message: String) : Exception(message)
+class PythonApiException(val errorCode: String, message: String) : Exception(message)

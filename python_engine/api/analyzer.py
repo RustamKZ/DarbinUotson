@@ -6,6 +6,11 @@ from typing import Optional
 from statsmodels.tsa.vector_ar.vecm import JohansenTestResult
 from algorithms.integration import determine_integration_order, log
 from algorithms.cointegration_tests import aeg_test, johansen_test
+from algorithms.stl_decomposition import detect_trend_and_seasonality
+from algorithms.ecm import build_ecm_model
+from algorithms.var import build_var_on_differences
+from algorithms.mixed_regression import build_mixed_regression
+from algorithms.regression import ols_regression
 from models.responses import (
   SeriesOrder,
   AnalysisResult,
@@ -18,7 +23,10 @@ from models.responses import (
   PeriodModelResult,
   StructuralBreak,
   PeriodInfo,
-  AegTestResult
+  AegTestResult,
+  StlResult,
+  TransformationType,
+  TransformationInfo
 )
 from models.domain import (
   PreparedData,
@@ -26,38 +34,173 @@ from models.domain import (
   PeriodData
 )
 
-
 def analyze_time_series(input_json: str) -> str:
-  # input_json: JSON string {"series": [[1,2,3], [4,5,6], ...]}
-  input_data = json.loads(input_json)
+  try:
+    input_data = json.loads(input_json)
+  except json.JSONDecodeError as e:
+    error = {
+      "error": "INVALID_JSON",
+      "message": f"Failed to parse JSON input: {str(e)}"
+    }
+    return json.dumps(error)
+
+  if "series" not in input_data:
+    error = {
+      "error": "MISSING_SERIES",
+      "message": "Input must contain 'series' field"
+    }
+    return json.dumps(error)
+
+  if not isinstance(input_data["series"], list):
+    error = {
+      "error": "INVALID_SERIES",
+      "message": "'series' must be an array"
+    }
+    return json.dumps(error)
+
+  if len(input_data["series"]) == 0:
+    error = {
+      "error": "EMPTY_SERIES",
+      "message": "'series' array is empty"
+    }
+    return json.dumps(error)
+
+  if len(input_data["series"]) < 2:
+    error = {
+      "error": "INSUFFICIENT_SERIES",
+      "message": "At least 2 time series required for regression analysis (1 dependent + 1 independent)"
+    }
+    return json.dumps(error)
 
   series_list = []
-  for s in input_data["series"]:
-    series_list.append(np.array(s))
+  variable_names = []
 
-  # get all info from stationarity tests
-  series_orders = _analyze_series_orders(series_list)
+  for idx, s in enumerate(input_data["series"]):
+    if not isinstance(s, dict):
+      error = {
+        "error": "INVALID_SERIES_FORMAT",
+        "message": f"Series at index {idx} must be an object with 'name' and 'data' fields"
+      }
+      return json.dumps(error)
 
-  # get one of three possible model types
-  model_type = _decide_model_type(series_orders)
-  log(f"model type: {model_type.value}")
+    if "data" not in s:
+      error = {
+        "error": "MISSING_DATA",
+        "message": f"Series at index {idx} is missing 'data' field"
+      }
+      return json.dumps(error)
 
-  # checking structural breaks existence
-  prepared_data = _prepare_data(series_list, series_orders, model_type)
+    if not isinstance(s["data"], list):
+      error = {
+        "error": "INVALID_DATA_FORMAT",
+        "message": f"Series at index {idx}: 'data' must be an array"
+      }
+      return json.dumps(error)
 
-  # build model based on prepared data
-  model_results = _build_model(prepared_data)
+    if len(s["data"]) < 20:
+      error = {
+        "error": "INSUFFICIENT_DATA",
+        "message": f"Series at index {idx} has only {len(s['data'])} observations (minimum: 20)"
+      }
+      return json.dumps(error)
 
-  result = AnalysisResult(
-    series_count = len(series_list),
-    series_orders = series_orders,
-    model_type = model_type.value,
-    model_results = asdict(model_results) if model_results else None,
-    has_structural_break = prepared_data.has_structural_break,
-    structural_breaks = prepared_data.structural_breaks
-  )
+    series_list.append(np.array(s["data"]))
+    variable_names.append(s.get("name", f"series_{idx}"))
 
-  return json.dumps(asdict(result), default = str)
+  target_index = input_data.get("target_index")
+
+  if target_index is not None:
+    if not isinstance(target_index, int):
+      error = {
+        "error": "INVALID_TARGET_INDEX",
+        "message": "'target_index' must be an integer"
+      }
+      return json.dumps(error)
+
+    if target_index < 0 or target_index >= len(series_list):
+      error = {
+        "error": "TARGET_INDEX_OUT_OF_RANGE",
+        "message": f"'target_index' must be between 0 and {len(series_list) - 1}"
+      }
+      return json.dumps(error)
+
+    log(f"user-specified target: {variable_names[target_index]}")
+  else:
+    target_index = _auto_detect_target(variable_names)
+    log(f"auto-detected target: {variable_names[target_index]}")
+
+  target_variable = variable_names[target_index]
+
+  if target_index != 0:
+    _swap_series(series_list, variable_names, 0, target_index)
+
+  try:
+    series_orders = _analyze_series_orders(series_list)
+
+    model_type = _decide_model_type(series_orders)
+    log(f"model type: {model_type.value}")
+
+    prepared_data = _prepare_data(series_list, series_orders, model_type)
+
+    transformations = None
+    if model_type == ModelType.MIXED:
+      transformations = _create_transformation_info(series_orders, variable_names)
+
+    model_results = _build_model(prepared_data)
+
+    result = AnalysisResult(
+      series_count = len(series_list),
+      variable_names = variable_names,
+      target_variable = target_variable,
+      series_orders = series_orders,
+      model_type = model_type.value,
+      model_results = asdict(model_results) if model_results else None,
+      has_structural_break = prepared_data.has_structural_break,
+      structural_breaks = prepared_data.structural_breaks,
+      transformations = transformations
+    )
+
+    return json.dumps(asdict(result), default = str)
+
+  except Exception as e:
+    log(f"[ERROR] Analysis failed: {e}")
+    import traceback
+    traceback.print_exc(file=sys.stderr)
+    
+    error = {
+      "error": "ANALYSIS_FAILED",
+      "message": f"Time series analysis failed: {str(e)}"
+    }
+    return json.dumps(error)
+
+def _auto_detect_target(names: list[str]) -> int:
+  health_keywords = [
+    "disease", "illness", "mortality", "death", "infection",
+    "hospital", "patient", "symptom", "diagnosis",
+    "respiratory", "cardiovascular", "cancer", "rate",
+    "cases", "incidence", "prevalence"
+  ]
+
+  for i in range(len(names)):
+    name_lower = names[i].lower()
+
+    for keyword in health_keywords:
+      if keyword in name_lower:
+        log(f"found health variable: {names[i]}")
+        return i
+
+  log("no health variable detected, using first series")
+  return 0
+
+
+def _swap_series(
+  series_list: list[np.ndarray],
+  names: list[str],
+  idx1: int,
+  idx2: int
+):
+  series_list[idx1], series_list[idx2] = series_list[idx2], series_list[idx1]
+  names[idx1], names[idx2] = names[idx2], names[idx1]
 
 
 def _analyze_series_orders(series_list: list[np.ndarray]) -> list[SeriesOrder]:
@@ -68,13 +211,18 @@ def _analyze_series_orders(series_list: list[np.ndarray]) -> list[SeriesOrder]:
     log(f"\nseries {i + 1}")
     i = i + 1
 
-    # TODO: implement STL decomposition and create statement tree.
-    # need to know if there's a trend.
-    # if has trend: kpss_regression = "ct" and za_regression = "ct"
-    kpss_regression = "c"
-    za_regression = "c"
+    stl_result: StlResult = detect_trend_and_seasonality(series)
 
-    order_result = determine_integration_order(
+    if stl_result.has_trend:
+      log("stl detected trend: using 'ct' regression")
+      kpss_regression = "ct"
+      za_regression = "ct"
+    else:
+      log("stl no trend: using 'c' regression")
+      kpss_regression = "c"
+      za_regression = "c"
+
+    order_result: IntegrationOrderResult = determine_integration_order(
       data = series,
       kpss_regression = kpss_regression,
       za_regression = za_regression
@@ -86,7 +234,12 @@ def _analyze_series_orders(series_list: list[np.ndarray]) -> list[SeriesOrder]:
         has_conflict = order_result.has_conflict,
         adf = order_result.adf_result,
         kpss = order_result.kpss_result,
-        structural_break = order_result.structural_break
+        za = order_result.za_result,
+        structural_break = order_result.structural_break,
+        has_trend = stl_result.has_trend,
+        has_seasonality = stl_result.has_seasonality,
+        trend_strength = stl_result.trend_strength,
+        seasonal_strength = stl_result.seasonal_strength
       )
     )
 
@@ -98,7 +251,6 @@ def _decide_model_type(series_orders: list[SeriesOrder]) -> ModelType:
   for s in series_orders:
     integration_orders.append(s.order)
 
-  # check if everything is I(0)
   all_stationary = True
   for order in integration_orders:
     if order != 0:
@@ -108,7 +260,6 @@ def _decide_model_type(series_orders: list[SeriesOrder]) -> ModelType:
   if all_stationary:
     return ModelType.FULL_STATIONARY
 
-  # check if everything is I(1)
   all_non_stationary = True
   for order in integration_orders:
     if order != 1:
@@ -298,34 +449,140 @@ def _build_model_with_breaks(prepared_data: PreparedData) -> ModelResults:
     period_results = period_results
   )
 
-
 def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
   series_list = prepared_data.original_series
+  series_orders = prepared_data.series_orders
   model_type = prepared_data.model_type
+
+  if len(series_list) < 2:
+    log("[ERROR] regression requires at least 2 variables (1 dependent + 1 independent)")
+    return ModelResults(
+      error_message = "Regression requires at least 2 variables (1 dependent + 1 independent)"
+    )
 
   if model_type == ModelType.FULL_STATIONARY:
     log("full stationary: regression on levels")
-    # TODO: implement regression on levels
-    return None
+
+    y = series_list[0]
+    X_list = []
+
+    i = 1
+    while i < len(series_list):
+      X_list.append(series_list[i])
+      i += 1
+
+    try:
+      regression_result = ols_regression(
+        y = y,
+        X_list = X_list,
+        add_constant = True,
+        auto_select_lags = True,
+        max_lags_search = 5
+      )
+
+      return ModelResults(regression = regression_result)
+      
+    except Exception as e:
+      log(f"[ERROR] OLS regression failed: {e}")
+      return ModelResults(
+        error_message = f"OLS regression failed: {str(e)}"
+      )
+
   elif model_type == ModelType.FULL_NON_STATIONARY:
     log("full non-stationary: testing cointegration")
-    # TODO: depends on STL decomposition result
-    coint_regression = "c"
-    coint_result = _check_cointegration(series_list, coint_regression)
+
+    has_any_trend = False
+    for so in series_orders:
+      if so.has_trend:
+        has_any_trend = True
+        break
+
+    if has_any_trend:
+      log("trend detected in series: using 'ct' for cointegration")
+      coint_regression = "ct"
+    else:
+      log("no trend: using 'c' for cointegration")
+      coint_regression = "c"
+
+    try:
+      coint_result = _check_cointegration(series_list, coint_regression)
+    except Exception as e:
+      log(f"[ERROR] cointegration test failed: {e}")
+      return ModelResults(
+        error_message = f"Cointegration test failed: {str(e)}"
+      )
 
     if coint_result.is_cointegrated:
-      log("cointegration found: ECM")
-      # TODO: implement ECM model
+      log("cointegration found: building ECM")
+      
+      try:
+        regression_result = build_ecm_model(series_list, coint_regression)
+
+        return ModelResults(
+          cointegration = coint_result,
+          regression = regression_result
+        )
+      except Exception as e:
+        log(f"[ERROR] ECM model failed: {e}")
+        return ModelResults(
+          cointegration = coint_result,
+          error_message = f"ECM model failed: {str(e)}"
+        )
     else:
-      log("no cointegration: VAR on differences")
-      # TODO: implement VAR model
+      log("no cointegration: building VAR on differences")
+      
+      try:
+        regression_result = build_var_on_differences(series_list)
 
-    return ModelResults(cointegration = coint_result)
+        return ModelResults(
+          cointegration = coint_result,
+          regression = regression_result
+        )
+      except Exception as e:
+        log(f"[ERROR] VAR model failed: {e}")
+        return ModelResults(
+          cointegration = coint_result,
+          error_message = f"VAR model failed: {str(e)}"
+        )
+
   elif model_type == ModelType.MIXED:
-    log("mixed integration orders")
-    # TODO: implement mixed case logic
-    return None
+    log("mixed integration orders: transforming series")
 
+    transformed_series = []
+
+    for i in range(len(series_list)):
+      series = series_list[i]
+      order = series_orders[i].order
+
+      if order == 0:
+        log(f"series {i}: I(0) → remains at levels")
+        transformed_series.append(series)
+
+      elif order == 1:
+        log(f"series {i}: I(1) → first difference")
+        diff1 = np.diff(series)
+        transformed_series.append(diff1)
+
+      elif order == 2:
+        log(f"series {i}: I(2) → second difference")
+        diff1 = np.diff(series)
+        diff2 = np.diff(diff1)
+        transformed_series.append(diff2)
+
+      else:
+        log(f"[WARNING] series {i}: unsupported order {order}, using levels")
+        transformed_series.append(series)
+
+    try:
+      regression_result = build_mixed_regression(transformed_series, series_orders)
+
+      return ModelResults(regression = regression_result)
+      
+    except Exception as e:
+      log(f"[ERROR] Mixed regression failed: {e}")
+      return ModelResults(
+        error_message = f"Mixed regression failed: {str(e)}"
+      )
 
 def _check_cointegration(
     series_list: list[np.ndarray],
@@ -365,3 +622,30 @@ def _check_cointegration(
       johansen_trace_stats = johansen_result.lr1.tolist(),
       n_cointegration_relations = num_coint
     )
+
+def _create_transformation_info(
+  series_orders: list[SeriesOrder],
+  variable_names: list[str]
+) -> list[TransformationInfo]:
+  transformations = []
+  
+  for i in range(len(series_orders)):
+    order = series_orders[i].order
+    
+    if order == 0:
+      transformation = TransformationType.NONE
+    elif order == 1:
+      transformation = TransformationType.FIRST_DIFFERENCE
+    elif order == 2:
+      transformation = TransformationType.SECOND_DIFFERENCE
+    else:
+      transformation = TransformationType.NONE
+    
+    transformations.append(TransformationInfo(
+      series_index = i,
+      variable_name = variable_names[i],
+      original_order = order,
+      transformation = transformation
+    ))
+  
+  return transformations 
