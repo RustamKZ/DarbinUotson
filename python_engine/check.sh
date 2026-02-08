@@ -21,9 +21,9 @@
 ## FINAL regression analysis test
 # pytest -s -v tests/test_analysis.py
 #pytest -s -v tests/test_real_data_analysis.py::TestRealDataAnalysis::test_full_analysis_with_real_data
-#pytest tests/test_real_data_analysis.py::TestRealDataAnalysis::test_different_health_outcomes -v -s
+pytest tests/test_real_data_analysis.py::TestRealDataAnalysis::test_different_health_outcomes -v -s
 
 
 #pytest -s -v tests/test_multiple_countries.py::TestMultipleCountries::test_analyze_10_countries
 
-pytest tests/test_economic_analysis.py -v -s
+#pytest tests/test_economic_analysis.py -v -s
