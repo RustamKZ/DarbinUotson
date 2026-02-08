@@ -54,6 +54,8 @@ communists will be happy - KPSS will help to find out the truth
 def kpss_test(data: np.ndarray, regression: str = "c") -> KpssTestResult:
   result = kpss(data, nlags = "auto", regression = regression)
 
+  is_stationary = result[1] > 0.05
+
   log(f"kpss: stat={result[0]:.3f}, p={result[1]:.4f}")
 
   critical = KpssCriticalValues(
@@ -67,7 +69,8 @@ def kpss_test(data: np.ndarray, regression: str = "c") -> KpssTestResult:
     kpss_stat = float(result[0]),
     p_value = float(result[1]),
     lags = int(result[2]),
-    crit = critical
+    crit = critical,
+    is_stationary = is_stationary
   )
 
 # not less than 20 elements in ds

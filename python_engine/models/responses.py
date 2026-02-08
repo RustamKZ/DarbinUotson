@@ -4,6 +4,16 @@ from typing import Optional
 from enum import Enum
 
 @dataclass
+class StlResult:
+  has_trend: bool
+  has_seasonality: bool
+  trend_strength: float
+  seasonal_strength: float
+  trend_component: Optional[np.ndarray] = None
+  seasonal_component: Optional[np.ndarray] = None
+  residual_component: Optional[np.ndarray] = None
+
+@dataclass
 class AdfCriticalValues:
   one_percent: float
   five_percent: float
@@ -32,6 +42,7 @@ class KpssTestResult:
   p_value: float
   lags: int
   crit: KpssCriticalValues
+  is_stationary: bool
 
 @dataclass
 class ErrorResponse:
@@ -45,6 +56,7 @@ class IntegrationOrderResult:
   kpss_result: KpssTestResult
   has_conflict: bool = False
   structural_break: Optional[int] = None # structural break index
+  za_result: Optional[ZivotAndrewsResult] = None
 
 @dataclass
 class ZivotAndrewsResult:
@@ -66,7 +78,12 @@ class SeriesOrder:
   has_conflict: bool
   adf: AdfTestResult
   kpss: KpssTestResult
+  za: Optional[ZivotAndrewsResult] = None
   structural_break: Optional[int] = None
+  has_trend: bool = False
+  has_seasonality: bool = False
+  trend_strength: float = 0.0
+  seasonal_strength: float = 0.0
 
 @dataclass
 class AegCritValues:
@@ -159,8 +176,23 @@ class ModelResults:
 @dataclass
 class AnalysisResult:
   series_count: int
+  variable_names: list[str]
+  target_variable: str
   series_orders: list[SeriesOrder]
   model_type: str
   model_results: Optional[dict] = None
   has_structural_break: bool = False
   structural_breaks: Optional[list[StructuralBreak]] = None
+  transformations: Optional[list[TransformationInfo]] = None
+
+class TransformationType(Enum):
+  NONE = "none"
+  FIRST_DIFFERENCE = "first_difference"
+  SECOND_DIFFERENCE = "second_difference"
+
+@dataclass
+class TransformationInfo:
+  series_index: int
+  variable_name: str
+  original_order: int
+  transformation: TransformationType
