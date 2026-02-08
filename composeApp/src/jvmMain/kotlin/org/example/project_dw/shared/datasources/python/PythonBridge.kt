@@ -21,7 +21,6 @@ class PythonBridge {
 
       val output = executePython(inputJson)
 
-      // Проверяем: ошибка или успех?
       if (output.contains("\"error\"")) {
         val error = PythonSerializer.deserialize(
           ApiError.serializer(),
