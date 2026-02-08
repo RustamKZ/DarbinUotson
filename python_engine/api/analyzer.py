@@ -178,7 +178,8 @@ def _auto_detect_target(names: list[str]) -> int:
     "disease", "illness", "mortality", "death", "infection",
     "hospital", "patient", "symptom", "diagnosis",
     "respiratory", "cardiovascular", "cancer", "rate",
-    "cases", "incidence", "prevalence"
+    "cases", "incidence", "prevalence",
+    "admission", "health", "incident", "risk"
   ]
 
   for i in range(len(names)):
