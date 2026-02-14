@@ -204,7 +204,7 @@ class MainViewModel {
          */
     }
 
-    fun runSTLDecomposition(period: Int = 288) {
+    fun runSTLDecomposition(period: Int = 52) {
         val currentData = _csvData.value ?: return
         if (selectedColumns.isEmpty()) return
 
