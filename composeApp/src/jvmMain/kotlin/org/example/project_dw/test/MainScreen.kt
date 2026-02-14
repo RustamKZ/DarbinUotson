@@ -68,13 +68,6 @@ class MainScreen : Screen {
                         Text("Выберите набор данных")
                     }
                     Button(
-                        onClick = {
-                            navigator.push(JarqueBeraScreen(viewModel))
-                        },
-                    ) {
-                        Text("Далее (TEST)")
-                    }
-                    Button(
                         onClick = { showCountryDialog = true },
                         enabled = csvData != null
                     ) {
@@ -82,13 +75,12 @@ class MainScreen : Screen {
                     }
                     Button(
                         onClick = {
-                            val req = viewModel.buildTimeSeriesRequest()
-                            viewModel.debugInfo = req?.let { "Request series=${it.series.size}, targetIndex=${it.targetIndex}" }
-                                ?: viewModel.error
+                            viewModel.buildTimeSeriesRequest()?.let { req ->
+                                navigator.push(FinalScreen(viewModel, req))
+                            }
                         },
                         enabled = csvData != null && viewModel.selectedColumns.isNotEmpty()
                     ) { Text("Сформировать TimeSeriesRequest") }
-
                 }
                 Spacer(Modifier.height(16.dp))
 
