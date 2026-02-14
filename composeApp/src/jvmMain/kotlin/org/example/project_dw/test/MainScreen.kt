@@ -44,6 +44,9 @@ class MainScreen : Screen {
         // для выбора страны
         var showCountryDialog by remember { mutableStateOf(false) }
 
+        // для выбора целевой переменной
+        var showTargetRowDialog by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
@@ -77,6 +80,14 @@ class MainScreen : Screen {
                     ) {
                         Text(viewModel.selectedCountry?.let { "Страна: $it" } ?: "Выбрать страну")
                     }
+                    Button(
+                        onClick = {
+                            val req = viewModel.buildTimeSeriesRequest()
+                            viewModel.debugInfo = req?.let { "Request series=${it.series.size}, targetIndex=${it.targetIndex}" }
+                                ?: viewModel.error
+                        },
+                        enabled = csvData != null && viewModel.selectedColumns.isNotEmpty()
+                    ) { Text("Сформировать TimeSeriesRequest") }
 
                 }
                 Spacer(Modifier.height(16.dp))
@@ -144,8 +155,10 @@ class MainScreen : Screen {
                         ) {
                             Text("Шаг 3", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Button(
-                                onClick = { viewModel.runSTLDecomposition(period = 52)
-                                    step3 = true}, // 24 часа × 12 записей/час = 288
+                                onClick = {
+                                    viewModel.runSTLDecomposition(period = 52)
+                                    step3 = true
+                                }, // 24 часа × 12 записей/час = 288
                                 enabled = viewModel.selectedColumns.isNotEmpty() and step2,
                             ) {
                                 Text("STL декомпозиция")
@@ -158,7 +171,7 @@ class MainScreen : Screen {
                             Text("  Seasonal mean: ${result.seasonal.average()}")
                             Text("  Residual mean: ${result.residual.average()}")
                             Button(
-                                onClick = { openPlotWindow(viewModel, columnIndex)},
+                                onClick = { openPlotWindow(viewModel, columnIndex) },
                                 modifier = Modifier.padding(top = 8.dp)
                             ) {
                                 Text("Посмотреть графики")
@@ -184,28 +197,36 @@ class MainScreen : Screen {
                         viewModel.outlierResults.forEach { (columnIndex, result) ->
                             Text("Column $columnIndex: Найдено ${result.outlierIndices.size} выбросов (${result.methodUsed})")
                         }
-                        if (viewModel.selectedColumns.size > 2) {
-                            Spacer(Modifier.height(16.dp))
+                        // Вот сюда надо добавить выбор целевой переменной - ряда
+                        Spacer(Modifier.height(16.dp))
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Шаг 5", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Text("Выбор целевой переменной", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+
                                 Button(
                                     onClick = {
-                                        viewModel.detectAndFixOutliers(strategy = "INTERPOLATE")
+                                        showTargetRowDialog = true
                                     },
-                                    enabled = viewModel.selectedColumns.isNotEmpty() && step3 && viewModel.selectedColumns.size > 2
+                                    enabled = step3 && viewModel.selectedColumns.isNotEmpty()
                                 ) {
-                                    Text("Проверка мультиколлинеарности VIF")
+                                    Text(
+                                        viewModel.targetColumn?.let { "Y: ${viewModel.columnName(it)}" }
+                                            ?: "Выбрать целевую (Y)"
+                                    )
+                                }
+                                Button(
+                                    onClick = { viewModel.runVifAndDropLeastRelatedToY(threshold = 10.0) },
+                                    enabled = step3 && viewModel.targetColumn != null && viewModel.selectedColumns.size > 2
+                                ) {
+                                    Text("Проверить VIF и удалить X")
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(16.dp))
 
-                            viewModel.outlierResults.forEach { (columnIndex, result) ->
-                                Text("Column $columnIndex: Найдено ${result.outlierIndices.size} выбросов (${result.methodUsed})")
-                            }
-                        }
+                        viewModel.vifInfo?.let { Text(it) }
+
                     }
                 }
                 if (showCountryDialog) {
@@ -220,6 +241,18 @@ class MainScreen : Screen {
                         onDismiss = { showCountryDialog = false }
                     )
                 }
+                if (showTargetRowDialog) {
+                    TargetPickerDialog(
+                        columns = viewModel.selectedColumns.toList().sorted(),
+                        getName = { idx -> viewModel.columnName(idx) },
+                        onPick = { y ->
+                            viewModel.setTargetColumn(y)
+                            showTargetRowDialog = false
+                        },
+                        onDismiss = { showTargetRowDialog = false }
+                    )
+                }
+
             }
         }
 

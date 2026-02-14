@@ -8,6 +8,10 @@ import co.touchlab.kermit.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import org.example.project_dw.shared.models.SeriesData
+import org.example.project_dw.shared.models.TimeSeriesRequest
 import org.example.project_dw.test.fill_gaps.LinearInterpolation
 import java.io.File
 import kotlin.collections.forEach
@@ -34,6 +38,12 @@ class MainViewModel {
     // этап 5
     var outlierResults by mutableStateOf<Map<Int, OutlierResult>>(emptyMap())
         private set
+    // этап VIF
+    var targetColumn by mutableStateOf<Int?>(null)
+        private set
+
+    var vifInfo by mutableStateOf<String?>(null)
+        private set
 
     // для выбора страны
     var selectedCountry by mutableStateOf<String?>(null)
@@ -52,7 +62,6 @@ class MainViewModel {
         private set
 
     var debugInfo by mutableStateOf<String?>(null)
-        private set
 
     data class JBResult(
         val statistic: Double,
@@ -381,6 +390,276 @@ class MainViewModel {
             }
         }
         return result
+    }
+
+    // VIF
+
+    fun setTargetColumn(col : Int) {
+        if (!selectedColumns.contains(col)) return
+        targetColumn = col
+        vifInfo = "Целевая переменная: ${columnName(col)} (col=$col)"
+    }
+
+    fun columnName(col: Int): String =
+        _csvData.value?.headers?.getOrNull(col) ?: "col_$col"
+
+    private fun pearson(x: DoubleArray, y: DoubleArray): Double {
+        // предполагаем одинаковую длину
+        val n = x.size
+        val mx = x.average()
+        val my = y.average()
+
+        var num = 0.0
+        var dx = 0.0
+        var dy = 0.0
+        for (i in 0 until n) {
+            val vx = x[i] - mx
+            val vy = y[i] - my
+            num += vx * vy
+            dx += vx * vx
+            dy += vy * vy
+        }
+        val den = kotlin.math.sqrt(dx) * kotlin.math.sqrt(dy)
+        return if (den == 0.0) 0.0 else num / den
+    }
+
+    private fun r2ByOls(y: DoubleArray, X: Array<DoubleArray>): Double {
+        // X: n x p
+        val n = y.size
+        val p = X[0].size
+
+        // Добавим intercept: X1 = [1, X...]
+        val A = Array(p + 1) { DoubleArray(p + 1) }
+        val b = DoubleArray(p + 1)
+
+        for (i in 0 until n) {
+            val row = DoubleArray(p + 1)
+            row[0] = 1.0
+            for (j in 0 until p) row[j + 1] = X[i][j]
+
+            // A += row^T row ; b += row^T y
+            for (r in 0..p) {
+                b[r] += row[r] * y[i]
+                for (c in 0..p) A[r][c] += row[r] * row[c]
+            }
+        }
+
+        val beta = solveLinearSystem(A, b) ?: return 0.0
+
+        val yMean = y.average()
+        var ssTot = 0.0
+        var ssRes = 0.0
+
+        for (i in 0 until n) {
+            var yHat = beta[0]
+            for (j in 0 until p) yHat += beta[j + 1] * X[i][j]
+
+            val e = y[i] - yHat
+            ssRes += e * e
+
+            val d = y[i] - yMean
+            ssTot += d * d
+        }
+
+        return if (ssTot == 0.0) 0.0 else (1.0 - ssRes / ssTot).coerceIn(0.0, 1.0)
+    }
+
+    private fun solveLinearSystem(A: Array<DoubleArray>, b: DoubleArray): DoubleArray? {
+        // Гаусс с частичным выбором главного элемента
+        val n = b.size
+        val M = Array(n) { i -> A[i].clone() }
+        val x = b.clone()
+
+        for (k in 0 until n) {
+            var pivot = k
+            var max = kotlin.math.abs(M[k][k])
+            for (i in k + 1 until n) {
+                val v = kotlin.math.abs(M[i][k])
+                if (v > max) { max = v; pivot = i }
+            }
+            if (max == 0.0) return null
+
+            if (pivot != k) {
+                val tmpRow = M[k]; M[k] = M[pivot]; M[pivot] = tmpRow
+                val tmp = x[k]; x[k] = x[pivot]; x[pivot] = tmp
+            }
+
+            val diag = M[k][k]
+            for (j in k until n) M[k][j] /= diag
+            x[k] /= diag
+
+            for (i in 0 until n) {
+                if (i == k) continue
+                val factor = M[i][k]
+                if (factor == 0.0) continue
+                for (j in k until n) M[i][j] -= factor * M[k][j]
+                x[i] -= factor * x[k]
+            }
+        }
+        return x
+    }
+
+    private fun computeVif(predictors: List<DoubleArray>): DoubleArray {
+        // predictors: list of X columns, each length n
+        val p = predictors.size
+        val n = predictors[0].size
+
+        // соберём матрицу n x p
+        val Xfull = Array(n) { i -> DoubleArray(p) { j -> predictors[j][i] } }
+
+        val vifs = DoubleArray(p)
+        for (j in 0 until p) {
+            // y = X_j, X = остальные
+            val y = DoubleArray(n) { i -> Xfull[i][j] }
+            val othersIdx = (0 until p).filter { it != j }
+            if (othersIdx.isEmpty()) {
+                vifs[j] = 1.0
+                continue
+            }
+            val X = Array(n) { i -> DoubleArray(othersIdx.size) { k -> Xfull[i][othersIdx[k]] } }
+            val r2 = r2ByOls(y, X)
+            vifs[j] = if (r2 >= 0.999999) Double.POSITIVE_INFINITY else 1.0 / (1.0 - r2)
+        }
+        return vifs
+    }
+
+    fun runVifAndDropLeastRelatedToY(threshold: Double = 10.0) {
+        val data = _csvData.value ?: return
+        val yCol = targetColumn ?: run {
+            vifInfo = "Выберите целевую переменную (Y)"
+            return
+        }
+
+        // X = все выбранные кроме Y
+        var xCols = selectedColumns.filter { it != yCol }.toMutableList()
+        if (xCols.size < 2) {
+            vifInfo = "Для VIF нужно минимум 2 X (сейчас ${xCols.size})"
+            return
+        }
+
+        // здесь предполагаем, что NaN уже убраны (интерполяция сделана)
+        val y = data.matrix.map { it[yCol].asDoubleOrNaN() }.toDoubleArray()
+        if (y.any { it.isNaN() || it.isInfinite() }) {
+            vifInfo = "Y содержит NaN/Inf — сначала заполните пропуски"
+            return
+        }
+
+        fun colAsDouble(c: Int): DoubleArray =
+            data.matrix.map { it[c].asDoubleOrNaN() }.toDoubleArray()
+
+        // Проверяем и удаляем, пока VIF плохой
+        var iteration = 0
+        while (xCols.size >= 2) {
+            iteration++
+
+            val predictors = xCols.map { colAsDouble(it) }
+            if (predictors.any { col -> col.any { it.isNaN() || it.isInfinite() } }) {
+                vifInfo = "X содержит NaN/Inf — сначала заполните пропуски"
+                return
+            }
+
+            val vifs = computeVif(predictors)
+            val maxVif = vifs.maxOrNull() ?: 1.0
+
+            // соберём лог
+            val lines = buildString {
+                appendLine("VIF iter=$iteration (threshold=$threshold), Y=${columnName(yCol)}")
+                xCols.forEachIndexed { i, c ->
+                    appendLine("  X=${columnName(c)} (col=$c) VIF=${vifs[i]}")
+                }
+                appendLine("  maxVIF=$maxVif")
+            }
+            vifInfo = lines
+
+            if (maxVif <= threshold) break
+
+            // Удаляем X с минимальной |corr(X, Y)|
+            val corrs = predictors.map { x -> kotlin.math.abs(pearson(x, y)) }
+            val minIdx = corrs.indices.minBy { corrs[it] }  // индекс в predictors/xCols
+            val removedCol = xCols[minIdx]
+            xCols.removeAt(minIdx)
+
+            // И удаляем из выбранных колонок тоже
+            selectedColumns = selectedColumns - removedCol
+
+            vifInfo = lines + "\nУдалён X: ${columnName(removedCol)} (col=$removedCol), |corr|=${corrs[minIdx]}"
+        }
+    }
+
+    fun buildTimeSeriesRequest(): TimeSeriesRequest? {
+        val data = _csvData.value ?: run {
+            error = "Нет данных"
+            return null
+        }
+
+        val cols = selectedColumns.toList().sorted()
+        if (cols.isEmpty()) {
+            error = "Не выбраны ряды"
+            return null
+        }
+
+        val seriesList = cols.map { col ->
+            val name = data.headers.getOrNull(col) ?: "col_$col"
+            val values = data.matrix.map { row -> row[col].asDoubleOrNaN() }
+
+            if (values.any { it.isNaN() || it.isInfinite() }) {
+                error = "В ряде '$name' есть NaN/Inf — сначала заполните пропуски"
+                return null
+            }
+
+            SeriesData(
+                name = name,
+                data = values
+            )
+        }
+
+        val targetIdx = targetColumn?.let { yCol ->
+            val idx = cols.indexOf(yCol)
+            if (idx < 0) {
+                error = "Целевая переменная не входит в выбранные ряды"
+                return null
+            }
+            idx
+        }
+
+        val request = TimeSeriesRequest(
+            series = seriesList,
+            targetIndex = targetIdx
+        )
+
+        // ====== DEBUG LOG ======
+        logger.d {
+            buildString {
+                appendLine("========== TimeSeriesRequest ==========")
+                appendLine("Series count: ${request.series.size}")
+                appendLine("Rows per series: ${request.series.firstOrNull()?.data?.size ?: 0}")
+                appendLine("Target index: ${request.targetIndex}")
+
+                request.series.forEachIndexed { index, s ->
+                    val isTarget = index == request.targetIndex
+                    appendLine(
+                        "  [$index] ${s.name} | n=${s.data.size}" +
+                                if (isTarget) "  <-- TARGET (Y)" else ""
+                    )
+                }
+
+                appendLine("=======================================")
+            }
+        }
+
+        return request
+    }
+
+
+    // если нужен json
+
+    fun buildTimeSeriesRequestJson(pretty: Boolean = true): String? {
+        val req = buildTimeSeriesRequest() ?: return null
+        val json = Json {
+            prettyPrint = pretty
+            encodeDefaults = true
+        }
+        return json.encodeToString(req)
     }
 
 }
