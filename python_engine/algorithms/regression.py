@@ -6,8 +6,6 @@ from algorithms.integration import log
 from models.responses import RegressionResult, DurbinWatsonResult
 from statsmodels.regression.linear_model import RegressionResultsWrapper
 
-# TODO: to think how to detect the dependent var Y amoung the other params
-
 def ols_regression(
     y: np.ndarray,
     X_list: list[np.ndarray],

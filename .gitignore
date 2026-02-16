@@ -29,3 +29,11 @@ python_engine/**/__pycache__/
 build_scripts/build/
 build_scripts/dist/
 build_scripts/__pycache__/
+
+# bruteforce files
+python_engine/analyze_results.py
+python_engine/bruteforce.log
+python_engine/bruteforce_results.zip
+python_engine/bruteforce_scan.py
+python_engine/bruteforce_summary.txt
+python_engine/check_cases.py
