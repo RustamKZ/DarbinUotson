@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import org.example.project_dw.shared.datasources.python.PythonBridge
 import org.example.project_dw.test.plot.openPlotWindow
 
 class MainScreen : Screen {
@@ -40,6 +41,7 @@ class MainScreen : Screen {
         var step1 by remember { mutableStateOf(false) }
         var step2 by remember { mutableStateOf(false) }
         var step3 by remember { mutableStateOf(false) }
+        val pythonBridge = PythonBridge()
 
         // для выбора страны
         var showCountryDialog by remember { mutableStateOf(false) }
@@ -76,7 +78,7 @@ class MainScreen : Screen {
                     Button(
                         onClick = {
                             viewModel.buildTimeSeriesRequest()?.let { req ->
-                                navigator.push(FinalScreen(viewModel, req))
+                                navigator.push(FinalScreen(viewModel, pythonBridge = pythonBridge,req))
                             }
                         },
                         enabled = csvData != null && viewModel.selectedColumns.isNotEmpty()

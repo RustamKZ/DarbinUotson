@@ -634,7 +634,6 @@ class MainViewModel {
                 appendLine("Series count: ${request.series.size}")
                 appendLine("Rows per series: ${request.series.firstOrNull()?.data?.size ?: 0}")
                 appendLine("Target index: ${request.targetIndex}")
-
                 request.series.forEachIndexed { index, s ->
                     val isTarget = index == request.targetIndex
                     appendLine(
