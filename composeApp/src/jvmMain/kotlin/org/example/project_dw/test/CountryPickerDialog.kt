@@ -7,18 +7,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Divider
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.jetbrains.skia.Surface
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Divider
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun CountryPickerDialog(
@@ -28,10 +27,27 @@ fun CountryPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Выберите страну") },
+        title = {
+            Column {
+                Text(
+                    text = "Выбор страны",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Выберите страну, по которой будут фильтроваться данные.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
         text = {
             Surface(
-                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = MaterialTheme.shapes.medium,
                 tonalElevation = 0.dp
             ) {
                 LazyColumn(
@@ -39,23 +55,38 @@ fun CountryPickerDialog(
                         .heightIn(max = 420.dp)
                         .fillMaxWidth()
                 ) {
-                    items(countries) { c ->
-                        Text(
-                            text = c,
+                    items(countries) { country ->
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onPick(c) }
-                                .padding(vertical = 10.dp, horizontal = 6.dp),
-                            color = MaterialTheme.colorScheme.onSurface
+                                .clickable { onPick(country) }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = country,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Divider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            thickness = 0.5.dp
                         )
-                        Divider()
                     }
                 }
             }
         },
-        confirmButton = {},
+        confirmButton = {}, // выбор происходит по клику на строку
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
-        }
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Закрыть",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }

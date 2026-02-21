@@ -1,21 +1,19 @@
 package org.example.project_dw.test
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Divider
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun TargetPickerDialog(
@@ -26,28 +24,66 @@ fun TargetPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Выберите целевую переменную (Y)") },
+        title = {
+            Column {
+                Text(
+                    text = "Выбор целевой переменной (Y)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Выберите один из ранее отмеченных рядов, который станет целевой переменной в модели.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
         text = {
-            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                shape = MaterialTheme.shapes.medium,
+                tonalElevation = 0.dp
+            ) {
                 LazyColumn(
                     modifier = Modifier
                         .heightIn(max = 420.dp)
                         .fillMaxWidth()
                 ) {
                     items(columns) { idx ->
-                        Text(
-                            text = "${getName(idx)} (col=$idx)",
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onPick(idx) }
-                                .padding(vertical = 10.dp, horizontal = 6.dp)
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = getName(idx),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Divider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            thickness = 0.5.dp
                         )
-                        Divider()
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Закрыть",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
