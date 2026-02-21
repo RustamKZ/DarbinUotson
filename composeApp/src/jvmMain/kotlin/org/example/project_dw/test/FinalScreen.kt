@@ -41,6 +41,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import org.example.project_dw.shared.datasources.python.PythonApiException
 import org.example.project_dw.shared.datasources.python.PythonBridge
+import org.example.project_dw.shared.models.CoefficientInfo
 import org.example.project_dw.shared.models.ModelResults
 import org.example.project_dw.shared.models.SeriesOrder
 import org.example.project_dw.shared.models.TimeSeriesAnalysisResult
@@ -481,6 +482,12 @@ fun ModelResultsView(
                     "автокорреляция = ${reg.durbinWatson.hasAutocorrelation}"
         )
 
+        // 👉 новый блок с таблицей коэффициентов
+        if (reg.coefficients.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            RegressionCoefficientsView(coefficients = reg.coefficients)
+        }
+
         Spacer(Modifier.height(12.dp))
     }
 
@@ -555,6 +562,20 @@ fun ModelResultsView(
                                 "F-статистика = ${"%.3f".format(reg.fStatistic)}, " +
                                         "p = ${"%.4f".format(reg.fPvalue)}"
                             )
+
+                            // 👉 НОВОЕ: коэффициенты модели для этого периода
+                            if (reg.coefficients.isNotEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = "Коэффициенты модели периода:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                RegressionCoefficientsTable(
+                                    coefficients = reg.coefficients
+                                )
+                            }
                         }
 
                         if (pr.errorMessage != null) {
@@ -596,5 +617,226 @@ fun ErrorView(error: Throwable) {
             text = message,
             color = MaterialTheme.colorScheme.error
         )
+    }
+}
+
+@Composable
+fun RegressionCoefficientsView(
+    coefficients: List<CoefficientInfo>
+) {
+    SectionCard(
+        title = "Коэффициенты регрессионной модели",
+        subtitle = "Оценки параметров, стандартные ошибки и значимость"
+    ) {
+        Column {
+            // Заголовок таблицы
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Параметр",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1.4f)
+                )
+                Text(
+                    text = "β",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(0.8f)
+                )
+                Text(
+                    text = "Std. error",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "t",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(0.8f)
+                )
+                Text(
+                    text = "p",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(0.8f)
+                )
+                Text(
+                    text = "Значимость",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(0.6f)
+                )
+            }
+
+            Divider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
+            // Строки по каждому коэффициенту
+            coefficients.forEach { coef ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = coef.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1.2f)
+                    )
+                    Text(
+                        text = "%.4f".format(coef.value),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(0.8f)
+                    )
+                    Text(
+                        text = "%.4f".format(coef.stdError),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "%.3f".format(coef.tValue),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(0.8f)
+                    )
+                    Text(
+                        text = "%.4f".format(coef.pValue),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(0.8f)
+                    )
+
+                    val sigText = if (coef.isSignificant) "Да" else "Нет"
+                    val sigColor = if (coef.isSignificant)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+
+                    Text(
+                        text = sigText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = sigColor,
+                        fontWeight = if (coef.isSignificant) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.weight(0.6f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RegressionCoefficientsTable(
+    coefficients: List<CoefficientInfo>
+) {
+    Column {
+        // Заголовок "таблицы"
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Параметр",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1.2f)
+            )
+            Text(
+                text = "β",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(0.8f)
+            )
+            Text(
+                text = "Std.err",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(0.9f)
+            )
+            Text(
+                text = "t",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(0.7f)
+            )
+            Text(
+                text = "p",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(0.7f)
+            )
+            Text(
+                text = "Sig.",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(0.7f)
+            )
+        }
+
+        Divider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        // Строки по коэффициентам
+        coefficients.forEach { coef ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 1.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = coef.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1.2f)
+                )
+                Text(
+                    text = "%.4f".format(coef.value),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(0.8f)
+                )
+                Text(
+                    text = "%.4f".format(coef.stdError),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(0.9f)
+                )
+                Text(
+                    text = "%.3f".format(coef.tValue),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(0.7f)
+                )
+                Text(
+                    text = "%.4f".format(coef.pValue),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(0.7f)
+                )
+
+                val sigText = if (coef.isSignificant) "Да" else "Нет"
+                val sigColor = if (coef.isSignificant)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
+
+                Text(
+                    text = sigText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = sigColor,
+                    fontWeight = if (coef.isSignificant) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.weight(0.7f)
+                )
+            }
+        }
     }
 }
