@@ -97,7 +97,6 @@ class AegTestResult:
   p_value: float
   crit_values: AegCritValues
 
-@dataclass
 class CointegrationTestType(Enum):
   AEG = "aeg"
   JOHANSEN = "johansen"
@@ -119,10 +118,7 @@ class DurbinWatsonResult:
 
 @dataclass
 class RegressionResult:
-  coefficients: list[float]
-  std_errors: list[float]
-  t_values: list[float]
-  p_values: list[float]
+  coefficients: list[CoefficientInfo]
   r_squared: float
   adj_r_squared: float
   f_statistic: float
@@ -180,7 +176,7 @@ class AnalysisResult:
   target_variable: str
   series_orders: list[SeriesOrder]
   model_type: str
-  model_results: Optional[dict] = None
+  model_results: Optional[ModelResults] = None
   has_structural_break: bool = False
   structural_breaks: Optional[list[StructuralBreak]] = None
   transformations: Optional[list[TransformationInfo]] = None
@@ -196,3 +192,12 @@ class TransformationInfo:
   variable_name: str
   original_order: int
   transformation: TransformationType
+
+@dataclass
+class CoefficientInfo:
+  name: str
+  value: float
+  std_error: float
+  t_value: float
+  p_value: float
+  is_significant: bool
