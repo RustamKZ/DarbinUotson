@@ -18,6 +18,9 @@ class PythonBridge {
         TimeSeriesRequest.serializer(),
         request
       )
+        println("===== JSON SENT TO PYTHON =====")
+        println(inputJson)
+        println("===== END JSON =====")
 
       val output = executePython(inputJson)
 
