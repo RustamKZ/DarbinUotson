@@ -1,6 +1,7 @@
 import json
 import sys
 import math
+from enum import Enum
 import numpy as np
 from dataclasses import asdict
 from typing import Optional
@@ -155,7 +156,7 @@ def analyze_time_series(input_json: str) -> str:
       target_variable = target_variable,
       series_orders = series_orders,
       model_type = model_type.value,
-      model_results = asdict(model_results) if model_results else None,
+      model_results = model_results,
       has_structural_break = prepared_data.has_structural_break,
       structural_breaks = prepared_data.structural_breaks,
       transformations = transformations
@@ -656,6 +657,8 @@ def _create_transformation_info(
 def _clean_nans(obj):
   if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
     return None
+  if isinstance(obj, Enum):
+    return obj.value
   if isinstance(obj, dict):
     return {k: _clean_nans(v) for k, v in obj.items()}
   if isinstance(obj, list):

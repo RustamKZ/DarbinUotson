@@ -256,8 +256,22 @@ data class AegCritValues(
 // regression
 
 @Serializable
+data class CoefficientInfo(
+  val name: String,
+  val value: Double,
+  @SerialName("std_error")
+  val stdError: Double,
+  @SerialName("t_value")
+  val tValue: Double,
+  @SerialName("p_value")
+  val pValue: Double,
+  @SerialName("is_significant")
+  val isSignificant: Boolean
+)
+
+@Serializable
 data class RegressionResult(
-  val coefficients: List<Double>,
+  val coefficients: List<CoefficientInfo>,
   
   @SerialName("std_errors")
   val stdErrors: List<Double>,
