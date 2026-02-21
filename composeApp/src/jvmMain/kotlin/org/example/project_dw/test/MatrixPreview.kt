@@ -10,12 +10,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.launch
 
 @Composable
 fun MatrixPreview(
@@ -25,10 +29,48 @@ fun MatrixPreview(
 ) {
     val horizontalScrollState = rememberScrollState()
     val columnWidth = 120.dp
+    val scrollStepPx = with(LocalDensity.current) { columnWidth.toPx().toInt() }  // шаг = ширина колонки
+    val coroutineScope = rememberCoroutineScope()
 
     Column(Modifier.padding(16.dp).fillMaxWidth(0.5f)) {
-        Text("Нажмите на заголовок, чтобы выбрать колонку для интерполяции",
-            style = MaterialTheme.typography.bodySmall)
+        Text(
+            "Нажмите на заголовок, чтобы выбрать колонку для интерполяции",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            val target = (horizontalScrollState.value - scrollStepPx)
+                                .coerceAtLeast(0)
+                            horizontalScrollState.animateScrollTo(target)
+                        }
+                    }
+                ) {
+                    Text("◀", color = Color.Blue)
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            val target = (horizontalScrollState.value + scrollStepPx)
+                                .coerceAtMost(horizontalScrollState.maxValue)
+                            horizontalScrollState.animateScrollTo(target)
+                        }
+                    }
+                ) {
+                    Text("▶", color = Color.Blue)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
 
         Box(Modifier.horizontalScroll(horizontalScrollState)) {
             LazyColumn {
