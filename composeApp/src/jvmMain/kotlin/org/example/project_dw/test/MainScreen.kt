@@ -139,7 +139,7 @@ class MainScreen : Screen {
                                     },
                                     enabled = csvData != null && viewModel.selectedColumns.isNotEmpty()
                                 ) {
-                                    Text("Сформировать TimeSeriesRequest")
+                                    Text("Построить модель")
                                 }
                             }
                         }
