@@ -8,6 +8,7 @@ import org.example.project_dw.shared.models.ApiError
 import java.io.File
 
 class PythonBridge {
+
   private val paths = PythonPathResolver.resolve()
 
   suspend fun analyzeTimeSeries(
@@ -18,9 +19,6 @@ class PythonBridge {
         TimeSeriesRequest.serializer(),
         request
       )
-        println("===== JSON SENT TO PYTHON =====")
-        println(inputJson)
-        println("===== END JSON =====")
 
       val output = executePython(inputJson)
 
@@ -52,15 +50,22 @@ class PythonBridge {
     }
 
     val processArgs = if (paths.isProd) {
-      listOf(paths.executable, inputJson)
+      listOf(paths.executable)
     } else {
-      listOf(paths.executable, paths.script, inputJson)
+      listOf(paths.executable, paths.script)
     }
 
     val process = ProcessBuilder(processArgs)
-    // MUST BE false because we need to separate sys.stdout and sys.stderr
+      // MUST BE false because we need to separate sys.stdout and sys.stderr
       .redirectErrorStream(false)
       .start()
+
+    // send JSON via stdin instead of command line argument
+    // (args are limited ~2 MB in Linux, stdin — no boundaries)
+    process.outputStream.bufferedWriter().use { writer ->
+      writer.write(inputJson)
+      writer.flush()
+    }
 
     val output = process.inputStream
       .bufferedReader()

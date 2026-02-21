@@ -24,14 +24,14 @@ def adf_test(data: np.ndarray) -> AdfTestResult:
   if _is_constant(data):
     log("series is constant, treating as I(0) stationary")
     return AdfTestResult(
-      test_statistic=np.nan,
+      test_statistic=0.0,
       p_value=0.0,
       used_lag=0,
       n_obs=len(data),
       critical_values=AdfCriticalValues(
-        one_percent=np.nan,
-        five_percent=np.nan,
-        ten_percent=np.nan
+        one_percent=0.0,
+        five_percent=0.0,
+        ten_percent=0.0
       ),
       is_stationary=True
     )
@@ -75,14 +75,14 @@ def kpss_test(data: np.ndarray, regression: str = "c") -> KpssTestResult:
       p_value=1.0,
       lags=0,
       crit=KpssCriticalValues(
-        one_percent=np.nan,
-        two_and_half_percent=np.nan,
-        five_percent=np.nan,
-        ten_percent=np.nan
+        one_percent=0.0,
+        two_and_half_percent=0.0,
+        five_percent=0.0,
+        ten_percent=0.0
       ),
       is_stationary=True
-    )
-  
+    ) 
+
   result = kpss(data, nlags = "auto", regression = regression)
   is_stationary = result[1] > 0.05
   log(f"kpss: stat={result[0]:.3f}, p={result[1]:.4f}")
@@ -105,18 +105,18 @@ def zivot_andrews_test(data: np.ndarray, trend: str = 'c') -> ZivotAndrewsResult
   if _is_constant(data):
     log("series is constant, ZA test skipped")
     return ZivotAndrewsResult(
-      test_statistic=np.nan,
+      test_statistic=0.0,
       p_value=0.0,
       used_lag=0,
       breakpoint=len(data) // 2,
       critical_values=AdfCriticalValues(
-        one_percent=np.nan,
-        five_percent=np.nan,
-        ten_percent=np.nan
+        one_percent=0.0,
+        five_percent=0.0,
+        ten_percent=0.0
       ),
       is_stationary=True
     )
-  
+
   result = zivot_andrews(data, trim=0.15, maxlag=None, regression=trend)
   log(f"ZA: stat={result[0]:.3f}, p={result[1]:.4f}, break={result[4]}")
   

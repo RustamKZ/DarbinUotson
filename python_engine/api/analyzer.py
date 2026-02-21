@@ -1,5 +1,6 @@
 import json
 import sys
+import math
 import numpy as np
 from dataclasses import asdict
 from typing import Optional
@@ -160,7 +161,8 @@ def analyze_time_series(input_json: str) -> str:
       transformations = transformations
     )
 
-    return json.dumps(asdict(result), default = str)
+    result_dict = _clean_nans(asdict(result))
+    return json.dumps(result_dict, default = str)
 
   except Exception as e:
     log(f"[ERROR] Analysis failed: {e}")
@@ -650,3 +652,12 @@ def _create_transformation_info(
     ))
   
   return transformations 
+
+def _clean_nans(obj):
+  if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+    return None
+  if isinstance(obj, dict):
+    return {k: _clean_nans(v) for k, v in obj.items()}
+  if isinstance(obj, list):
+    return [_clean_nans(v) for v in obj]
+  return obj
