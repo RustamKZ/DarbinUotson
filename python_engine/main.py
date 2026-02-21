@@ -5,20 +5,19 @@ from models.responses import ErrorResponse
 from dataclasses import asdict
 
 def main():
-  # input format: {"series": [[1,2,3], [4,5,6], ...]}
-  # JSON string to stdout, logs to stderr
-  if len(sys.argv) < 2:
-    error = ErrorResponse(
-      error="NO_INPUT",
-      message="No input data provided"
-    )
-    print(json.dumps(asdict(error)))
-    sys.exit(1)
-
   try:
-    input_json = sys.argv[1]
+    input_json = sys.stdin.read().strip()
+
+    if not input_json:
+      error = ErrorResponse(
+        error="NO_INPUT",
+        message="No input data provided"
+      )
+      print(json.dumps(asdict(error)))
+      sys.exit(1)
+
     result = analyze_time_series(input_json)
-    print(result)  #JSON string
+    print(result)
 
   except Exception as e:
     error = ErrorResponse(
@@ -27,7 +26,6 @@ def main():
     )
     print(json.dumps(asdict(error)))
     sys.exit(1)
-
 
 if __name__ == "__main__":
   main()
