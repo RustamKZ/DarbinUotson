@@ -273,15 +273,6 @@ data class CoefficientInfo(
 data class RegressionResult(
   val coefficients: List<CoefficientInfo>,
   
-  @SerialName("std_errors")
-  val stdErrors: List<Double>,
-  
-  @SerialName("t_values")
-  val tValues: List<Double>,
-  
-  @SerialName("p_values")
-  val pValues: List<Double>,
-  
   @SerialName("r_squared")
   val rSquared: Double,
   

@@ -36,6 +36,7 @@ from models.domain import (
   PeriodData
 )
 
+
 def analyze_time_series(input_json: str) -> str:
   try:
     input_data = json.loads(input_json)
@@ -148,7 +149,7 @@ def analyze_time_series(input_json: str) -> str:
     if model_type == ModelType.MIXED:
       transformations = _create_transformation_info(series_orders, variable_names)
 
-    model_results = _build_model(prepared_data)
+    model_results = _build_model(prepared_data, variable_names)
 
     result = AnalysisResult(
       series_count = len(series_list),
@@ -175,6 +176,7 @@ def analyze_time_series(input_json: str) -> str:
       "message": f"Time series analysis failed: {str(e)}"
     }
     return json.dumps(error)
+
 
 def _auto_detect_target(names: list[str]) -> int:
   health_keywords = [
@@ -389,14 +391,14 @@ def _analyze_period(
   )
 
 
-def _build_model(prepared_data: PreparedData) -> Optional[ModelResults]:
+def _build_model(prepared_data: PreparedData, variable_names: list[str]) -> Optional[ModelResults]:
   if prepared_data.has_structural_break:
-    return _build_model_with_breaks(prepared_data)
+    return _build_model_with_breaks(prepared_data, variable_names)
 
-  return _build_single_model(prepared_data)
+  return _build_single_model(prepared_data, variable_names)
 
 
-def _build_model_with_breaks(prepared_data: PreparedData) -> ModelResults:
+def _build_model_with_breaks(prepared_data: PreparedData, variable_names: list[str]) -> ModelResults:
   num_periods = len(prepared_data.periods_data)
   log(f"building separate models for {num_periods} periods")
 
@@ -421,7 +423,7 @@ def _build_model_with_breaks(prepared_data: PreparedData) -> ModelResults:
       series_orders = period_analysis.series_orders,
       model_type = period_analysis.model_type
     )
-    period_model = _build_single_model(period_prepared)
+    period_model = _build_single_model(period_prepared, variable_names)
 
     period_result = PeriodModelResult(
       period_type = period_analysis.period_type,
@@ -453,7 +455,8 @@ def _build_model_with_breaks(prepared_data: PreparedData) -> ModelResults:
     period_results = period_results
   )
 
-def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
+
+def _build_single_model(prepared_data: PreparedData, variable_names: list[str]) -> Optional[ModelResults]:
   series_list = prepared_data.original_series
   series_orders = prepared_data.series_orders
   model_type = prepared_data.model_type
@@ -481,7 +484,8 @@ def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
         X_list = X_list,
         add_constant = True,
         auto_select_lags = True,
-        max_lags_search = 5
+        max_lags_search = 5,
+        variable_names = variable_names
       )
 
       return ModelResults(regression = regression_result)
@@ -520,7 +524,10 @@ def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
       log("cointegration found: building ECM")
       
       try:
-        regression_result = build_ecm_model(series_list, coint_regression)
+        regression_result = build_ecm_model(
+          series_list, coint_regression,
+          variable_names = variable_names
+        )
 
         return ModelResults(
           cointegration = coint_result,
@@ -536,7 +543,10 @@ def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
       log("no cointegration: building VAR on differences")
       
       try:
-        regression_result = build_var_on_differences(series_list)
+        regression_result = build_var_on_differences(
+          series_list,
+          variable_names = variable_names
+        )
 
         return ModelResults(
           cointegration = coint_result,
@@ -578,7 +588,10 @@ def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
         transformed_series.append(series)
 
     try:
-      regression_result = build_mixed_regression(transformed_series, series_orders)
+      regression_result = build_mixed_regression(
+        transformed_series, series_orders,
+        variable_names = variable_names
+      )
 
       return ModelResults(regression = regression_result)
       
@@ -587,6 +600,7 @@ def _build_single_model(prepared_data: PreparedData) -> Optional[ModelResults]:
       return ModelResults(
         error_message = f"Mixed regression failed: {str(e)}"
       )
+
 
 def _check_cointegration(
     series_list: list[np.ndarray],
@@ -627,6 +641,7 @@ def _check_cointegration(
       n_cointegration_relations = num_coint
     )
 
+
 def _create_transformation_info(
   series_orders: list[SeriesOrder],
   variable_names: list[str]
@@ -652,7 +667,8 @@ def _create_transformation_info(
       transformation = transformation
     ))
   
-  return transformations 
+  return transformations
+
 
 def _clean_nans(obj):
   if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):

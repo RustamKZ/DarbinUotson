@@ -3,17 +3,27 @@ import numpy as np
 import statsmodels.api as sm
 from statsmodels.stats.stattools import durbin_watson
 from algorithms.integration import log
-from models.responses import RegressionResult, DurbinWatsonResult
+from models.responses import RegressionResult, DurbinWatsonResult, CoefficientInfo
 from statsmodels.regression.linear_model import RegressionResultsWrapper
+
 
 def ols_regression(
     y: np.ndarray,
     X_list: list[np.ndarray],
     add_constant: bool = True,
     auto_select_lags: bool = True,
-    max_lags_search: int = 5
+    max_lags_search: int = 5,
+    variable_names: list[str] = None
 ) -> RegressionResult:
-  result = _fit_ols(y, X_list, add_constant)
+
+  if variable_names is None:
+    target_name = "Y"
+    predictor_names = [f"X{i+1}" for i in range(len(X_list))]
+  else:
+    target_name = variable_names[0]
+    predictor_names = variable_names[1:]
+
+  result = _fit_ols(y, X_list, add_constant, predictor_names)
 
   if result.durbin_watson.has_autocorrelation == False:
     return result
@@ -24,14 +34,15 @@ def ols_regression(
     optimal_lags = 2
     log(f"using default {optimal_lags} lags")
 
-  result_with_lags = _fit_ols_with_lags(y, X_list, add_constant, optimal_lags)
+  result_with_lags = _fit_ols_with_lags(y, X_list, add_constant, optimal_lags, target_name, predictor_names)
 
   if result_with_lags.durbin_watson.has_autocorrelation == False:
     return result_with_lags
 
-  result_nw = _fit_ols_newey_west(y, X_list, add_constant)
+  result_nw = _fit_ols_newey_west(y, X_list, add_constant, predictor_names)
 
   return result_nw
+
 
 # AIC autolag
 def _select_optimal_lags(
@@ -76,7 +87,6 @@ def _select_optimal_lags(
       model = sm.OLS(y_clean, X_combined)
       results = model.fit()
 
-      # AIC = n * log(RSS/n) + 2*k
       n = results.nobs
       k = len(results.params)
       rss = results.ssr
@@ -92,16 +102,20 @@ def _select_optimal_lags(
   log(f"optimal lags: {best_lags} (AIC={best_aic:.2f})")
   return best_lags
 
+
 def _fit_ols(
     y: np.ndarray,
     X_list: list[np.ndarray],
-    add_constant: bool
+    add_constant: bool,
+    predictor_names: list[str]
 ) -> RegressionResult:
 
   X = _prepare_X_matrix(X_list)
 
   if add_constant:
     X = sm.add_constant(X)
+
+  names = _build_names_simple(add_constant, predictor_names)
 
   model = sm.OLS(y, X)
   results = model.fit()
@@ -113,25 +127,28 @@ def _fit_ols(
 
   return _create_regression_result(
     results = results,
+    names = names,
     dw_stat = dw_stat,
     has_autocorr = has_autocorr,
     has_lags = False,
     uses_newey_west = False
   )
 
+
 # ols with lagged Y and X vars
 def _fit_ols_with_lags(
     y: np.ndarray,
     X_list: list[np.ndarray],
     add_constant: bool,
-    max_lags: int
+    max_lags: int,
+    target_name: str,
+    predictor_names: list[str]
 ) -> RegressionResult:
   n = len(y)
 
-  # check if we have enough data for lags
   if n <= max_lags + 10:
     log(f"warning: insufficient data for {max_lags} lags (n={n}), using simple OLS")
-    return _fit_ols(y, X_list, add_constant)
+    return _fit_ols(y, X_list, add_constant, predictor_names)
 
   all_variables = []
 
@@ -157,6 +174,8 @@ def _fit_ols_with_lags(
   if add_constant:
     X_combined = sm.add_constant(X_combined)
 
+  names = _build_names_with_lags(add_constant, target_name, predictor_names, max_lags)
+
   model = sm.OLS(y_clean, X_combined)
   results = model.fit()
 
@@ -167,21 +186,26 @@ def _fit_ols_with_lags(
 
   return _create_regression_result(
     results = results,
+    names = names,
     dw_stat = dw_stat,
     has_autocorr = has_autocorr,
     has_lags = True,
     uses_newey_west = False
   )
 
+
 def _fit_ols_newey_west(
     y: np.ndarray,
     X_list: list[np.ndarray],
-    add_constant: bool
+    add_constant: bool,
+    predictor_names: list[str]
 ) -> RegressionResult:
   X = _prepare_X_matrix(X_list)
 
   if add_constant:
     X = sm.add_constant(X)
+
+  names = _build_names_simple(add_constant, predictor_names)
 
   model = sm.OLS(y, X)
   results = model.fit(cov_type = "HAC", cov_kwds = {"maxlags": None})
@@ -193,11 +217,13 @@ def _fit_ols_newey_west(
 
   return _create_regression_result(
     results = results,
+    names = names,
     dw_stat = dw_stat,
     has_autocorr = has_autocorr,
     has_lags = False,
     uses_newey_west = True
   )
+
 
 # ===== HELPER METHODS =====
 
@@ -207,13 +233,10 @@ def _prepare_X_matrix(X_list: list[np.ndarray]) -> np.ndarray:
   else:
     return np.column_stack(X_list)
 
+
 def _create_lag(data: np.ndarray, lag: int) -> np.ndarray:
-  """
-  Create lagged version of data using np.roll.
-  Note: np.roll cycles the array, so first 'lag' values will come from the end.
-  These incorrect values are removed later when we slice y_clean = y[max_lags:].
-  """
   return np.roll(data, lag)
+
 
 def _check_autocorrelation(dw_stat: float) -> bool:
   if dw_stat < 1.5:
@@ -222,18 +245,62 @@ def _check_autocorrelation(dw_stat: float) -> bool:
     return True
   return False
 
+
+def _build_names_simple(add_constant: bool, predictor_names: list[str]) -> list[str]:
+  names = []
+  if add_constant:
+    names.append("const")
+  for name in predictor_names:
+    names.append(name)
+  return names
+
+
+def _build_names_with_lags(
+    add_constant: bool,
+    target_name: str,
+    predictor_names: list[str],
+    max_lags: int
+) -> list[str]:
+  names = []
+  if add_constant:
+    names.append("const")
+
+  for name in predictor_names:
+    names.append(name)
+
+  for lag in range(1, max_lags + 1):
+    names.append(f"lag{lag}_{target_name}")
+
+  for name in predictor_names:
+    for lag in range(1, max_lags + 1):
+      names.append(f"lag{lag}_{name}")
+
+  return names
+
+
 def _create_regression_result(
     results: RegressionResultsWrapper,
+    names: list[str],
     dw_stat: float,
     has_autocorr: bool,
     has_lags: bool,
     uses_newey_west: bool
 ) -> RegressionResult:
+
+  coeffs = []
+  for i in range(len(results.params)):
+    name = names[i] if i < len(names) else f"coef_{i}"
+    coeffs.append(CoefficientInfo(
+      name = name,
+      value = float(results.params[i]),
+      std_error = float(results.bse[i]),
+      t_value = float(results.tvalues[i]),
+      p_value = float(results.pvalues[i]),
+      is_significant = float(results.pvalues[i]) < 0.05
+    ))
+
   return RegressionResult(
-    coefficients = results.params.tolist(),
-    std_errors = results.bse.tolist(),
-    t_values = results.tvalues.tolist(),
-    p_values = results.pvalues.tolist(),
+    coefficients = coeffs,
     r_squared = float(results.rsquared),
     adj_r_squared = float(results.rsquared_adj),
     f_statistic = float(results.fvalue),
